@@ -29,10 +29,18 @@ class MetaConverter {
 
     console.log('[BROWSER] Starting...');
 
-    this.browser = await chromium.launch({
-      headless: this.headless,
-      args: ['--disable-blink-features=AutomationControlled']
-    });
+    try {
+      this.browser = await chromium.launch({
+        headless: this.headless,
+        channel: 'chrome',  // Use system Chrome instead of bundled Chromium
+        args: ['--disable-blink-features=AutomationControlled']
+      });
+    } catch (e) {
+      if (e.message.includes('Executable doesn\'t exist') || e.message.includes('executable')) {
+        throw new Error('Google Chrome is not installed. Please install Chrome from https://google.com/chrome');
+      }
+      throw e;
+    }
 
     this.context = await this.browser.newContext({
       viewport: { width: 1920, height: 1080 },
@@ -69,6 +77,38 @@ class MetaConverter {
         currentUrl.toLowerCase().includes('facebook.com') ||
         currentUrl.toLowerCase().includes('checkpoint')) {
       throw new Error(`Not logged in. Redirected to: ${currentUrl}`);
+    }
+
+    // Check for actual logged-in state (not just guest access)
+    // Look for signs of being logged in vs guest mode
+    try {
+      // Wait a bit for page to fully load
+      await this.page.waitForTimeout(2000);
+
+      // Check for login/signup prompts that appear for guests
+      const guestIndicators = [
+        'text="Log in"',
+        'text="Sign up"',
+        'text="Continue with Facebook"',
+        '[aria-label="Log in"]',
+        '[aria-label="Sign up"]'
+      ];
+
+      for (const selector of guestIndicators) {
+        const element = this.page.locator(selector).first();
+        if (await element.count() > 0 && await element.isVisible()) {
+          console.log('[BROWSER] Found guest indicator:', selector);
+          throw new Error('Not logged in. Please provide valid cookies.');
+        }
+      }
+
+      console.log('[BROWSER] Logged in state verified');
+    } catch (e) {
+      if (e.message.includes('Not logged in')) {
+        throw e;
+      }
+      // Ignore other errors (element not found, etc.)
+      console.log('[BROWSER] Login check warning:', e.message);
     }
 
     console.log('[BROWSER] Ready!');
