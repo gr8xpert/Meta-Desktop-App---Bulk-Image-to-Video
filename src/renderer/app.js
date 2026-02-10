@@ -24,7 +24,13 @@ const elements = {
   fileGrid: document.getElementById('fileGrid'),
   fileActions: document.getElementById('fileActions'),
   selectedCount: document.getElementById('selectedCount'),
+  btnRetryFailed: document.getElementById('btnRetryFailed'),
   btnClearFiles: document.getElementById('btnClearFiles'),
+
+  // Window controls
+  btnMinimize: document.getElementById('btnMinimize'),
+  btnMaximize: document.getElementById('btnMaximize'),
+  btnClose: document.getElementById('btnClose'),
 
   // Output settings
   outputFolder: document.getElementById('outputFolder'),
@@ -57,10 +63,9 @@ const elements = {
   // Settings
   cookieDatr: document.getElementById('cookieDatr'),
   cookieAbraSess: document.getElementById('cookieAbraSess'),
-  cookieWd: document.getElementById('cookieWd'),
-  cookieDpr: document.getElementById('cookieDpr'),
   cookieStatus: document.getElementById('cookieStatus'),
   btnValidateCookies: document.getElementById('btnValidateCookies'),
+  btnClearCookies: document.getElementById('btnClearCookies'),
   settingDelay: document.getElementById('settingDelay'),
   settingRetries: document.getElementById('settingRetries'),
   settingHeadless: document.getElementById('settingHeadless'),
@@ -109,8 +114,6 @@ async function init() {
 function applyConfig(cfg) {
   if (cfg.datr) elements.cookieDatr.value = cfg.datr;
   if (cfg.abra_sess) elements.cookieAbraSess.value = cfg.abra_sess;
-  if (cfg.wd) elements.cookieWd.value = cfg.wd;
-  if (cfg.dpr) elements.cookieDpr.value = cfg.dpr;
   if (cfg.outputFolder) elements.outputFolder.value = cfg.outputFolder;
   if (cfg.namingPattern) elements.namingPattern.value = cfg.namingPattern;
   if (cfg.prompt) elements.customPrompt.value = cfg.prompt;
@@ -162,6 +165,12 @@ function setupEventListeners() {
   });
 
   elements.btnClearFiles.addEventListener('click', clearFiles);
+  elements.btnRetryFailed.addEventListener('click', retryFailedFiles);
+
+  // Window controls
+  elements.btnMinimize.addEventListener('click', () => window.api.minimizeWindow());
+  elements.btnMaximize.addEventListener('click', () => window.api.maximizeWindow());
+  elements.btnClose.addEventListener('click', () => window.api.closeWindow());
 
   // Output folder
   elements.btnSelectOutput.addEventListener('click', async () => {
@@ -191,6 +200,7 @@ function setupEventListeners() {
 
   // Settings
   elements.btnValidateCookies.addEventListener('click', validateCookies);
+  elements.btnClearCookies.addEventListener('click', clearCookies);
   elements.btnSaveSettings.addEventListener('click', saveSettings);
 
   // Modal
@@ -404,8 +414,8 @@ async function startConversion() {
     cookies: {
       datr: elements.cookieDatr.value,
       abra_sess: elements.cookieAbraSess.value,
-      wd: elements.cookieWd.value || '1920x1080',
-      dpr: elements.cookieDpr.value || '1'
+      wd: '1920x1080',
+      dpr: '1'
     },
     files: files.filter(f => f.status === 'pending'),
     outputFolder: elements.outputFolder.value,
@@ -587,6 +597,24 @@ async function retryConversion(inputPath) {
   showToast(`Added "${fileName}" for retry`, 'info');
 }
 
+// Retry all failed files in current queue
+function retryFailedFiles() {
+  const failedFiles = files.filter(f => f.status === 'error');
+  if (failedFiles.length === 0) {
+    showToast('No failed files to retry', 'info');
+    return;
+  }
+
+  // Reset failed files to pending
+  failedFiles.forEach(f => {
+    f.status = 'pending';
+    f.progress = 0;
+  });
+
+  renderFiles();
+  showToast(`${failedFiles.length} file(s) queued for retry`, 'success');
+}
+
 // ============================================
 // Settings
 // ============================================
@@ -598,8 +626,8 @@ async function validateCookies() {
   const result = await window.api.validateCookies({
     datr: elements.cookieDatr.value,
     abra_sess: elements.cookieAbraSess.value,
-    wd: elements.cookieWd.value,
-    dpr: elements.cookieDpr.value
+    wd: '1920x1080',
+    dpr: '1'
   });
 
   elements.btnValidateCookies.disabled = false;
@@ -626,8 +654,6 @@ async function saveSettings() {
   const cfg = {
     datr: elements.cookieDatr.value,
     abra_sess: elements.cookieAbraSess.value,
-    wd: elements.cookieWd.value,
-    dpr: elements.cookieDpr.value,
     outputFolder: elements.outputFolder.value,
     namingPattern: elements.namingPattern.value,
     prompt: elements.customPrompt.value,
@@ -639,6 +665,23 @@ async function saveSettings() {
   await window.api.saveConfig(cfg);
   config = cfg;
   showToast('Settings saved', 'success');
+}
+
+async function clearCookies() {
+  if (confirm('Clear all saved cookies?')) {
+    elements.cookieDatr.value = '';
+    elements.cookieAbraSess.value = '';
+    elements.cookieStatus.className = 'cookie-status';
+    elements.cookieStatus.innerHTML = '<div class="status-indicator"></div><span>Not validated</span>';
+
+    // Save empty cookies to config
+    const cfg = await window.api.loadConfig();
+    cfg.datr = '';
+    cfg.abra_sess = '';
+    await window.api.saveConfig(cfg);
+
+    showToast('Cookies cleared', 'success');
+  }
 }
 
 function toggleCustomPrompt() {

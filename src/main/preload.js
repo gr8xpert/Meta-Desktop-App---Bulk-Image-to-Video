@@ -33,5 +33,10 @@ contextBridge.exposeInMainWorld('api', {
   openFolder: (path) => ipcRenderer.invoke('open-folder', path),
   openFile: (path) => ipcRenderer.invoke('open-file', path),
   getPresets: () => ipcRenderer.invoke('get-presets'),
-  fileExists: (path) => ipcRenderer.invoke('file-exists', path)
+  fileExists: (path) => ipcRenderer.invoke('file-exists', path),
+
+  // Window controls
+  minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
+  maximizeWindow: () => ipcRenderer.invoke('maximize-window'),
+  closeWindow: () => ipcRenderer.invoke('close-window')
 });

@@ -265,8 +265,44 @@ body {
 }
 
 .nav-tab.active {
-  color: var(--accent-primary);
-  background: var(--accent-subtle);
+  color: white;
+  background: var(--accent-primary);
+}
+
+/* Window Controls */
+.window-controls {
+  display: flex;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.window-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.window-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.window-btn:hover {
+  background: var(--glass-highlight);
+  color: var(--text-primary);
+}
+
+.window-btn-close:hover {
+  background: var(--danger);
+  color: white;
 }
 
 /* ============================================
@@ -555,6 +591,11 @@ body {
   justify-content: space-between;
   padding: var(--space-md) var(--space-lg);
   border-top: 1px solid var(--glass-border);
+}
+
+.file-action-buttons {
+  display: flex;
+  gap: var(--space-sm);
 }
 
 .file-count {
@@ -1050,6 +1091,11 @@ select {
 
 .cookie-status.invalid .status-indicator {
   background: var(--danger);
+}
+
+.cookie-buttons {
+  display: flex;
+  gap: var(--space-sm);
 }
 
 /* ============================================

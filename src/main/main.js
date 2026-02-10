@@ -19,12 +19,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0a0a0f',
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#0a0a0f',
-      symbolColor: '#ffffff',
-      height: 40
-    },
+    frame: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -369,4 +364,21 @@ ipcMain.handle('get-presets', async () => {
     { id: 'portrait', name: 'Portrait', prompt: 'Subtle life-like motion for portraits, breathing, blinking' },
     { id: 'custom', name: 'Custom', prompt: '' }
   ];
+});
+
+// Window controls
+ipcMain.handle('minimize-window', () => {
+  mainWindow?.minimize();
+});
+
+ipcMain.handle('maximize-window', () => {
+  if (mainWindow?.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow?.maximize();
+  }
+});
+
+ipcMain.handle('close-window', () => {
+  mainWindow?.close();
 });
