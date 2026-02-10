@@ -387,27 +387,92 @@ ipcMain.handle('close-window', () => {
   mainWindow?.close();
 });
 
-// Retry failed download
+// Retry failed download - uses direct HTTPS download (no browser needed)
 ipcMain.handle('retry-download', async (event, { videoUrl, outputPath }) => {
-  if (!converter) {
-    // Create temporary converter for download retry
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    const tempConverter = new MetaConverter({
-      datr: config.datr,
-      abra_sess: config.abra_sess
-    }, { headless: true });
+  console.log('[RETRY-DOWNLOAD] Starting...');
+  console.log('[RETRY-DOWNLOAD] URL:', videoUrl);
+  console.log('[RETRY-DOWNLOAD] Output:', outputPath);
 
-    try {
-      await tempConverter.start();
-      const success = await tempConverter.retryDownload(videoUrl, outputPath);
-      await tempConverter.stop();
-      return { success, error: success ? null : 'Download failed after retries' };
-    } catch (e) {
-      await tempConverter.stop();
-      return { success: false, error: e.message };
-    }
+  if (!videoUrl) {
+    console.log('[RETRY-DOWNLOAD] No video URL provided');
+    return { success: false, error: 'No video URL stored for this file' };
   }
 
-  const success = await converter.retryDownload(videoUrl, outputPath);
-  return { success, error: success ? null : 'Download failed after retries' };
+  if (!outputPath) {
+    console.log('[RETRY-DOWNLOAD] No output path provided');
+    return { success: false, error: 'No output path specified' };
+  }
+
+  // Try direct download first (faster, no browser needed)
+  try {
+    const https = require('https');
+    const http = require('http');
+
+    const downloadWithRedirects = (url, maxRedirects = 5) => {
+      return new Promise((resolve, reject) => {
+        const protocol = url.startsWith('https') ? https : http;
+
+        const req = protocol.get(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': '*/*',
+            'Referer': 'https://www.meta.ai/'
+          }
+        }, (res) => {
+          // Handle redirects
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            if (maxRedirects <= 0) {
+              reject(new Error('Too many redirects'));
+              return;
+            }
+            console.log('[RETRY-DOWNLOAD] Redirect to:', res.headers.location);
+            downloadWithRedirects(res.headers.location, maxRedirects - 1)
+              .then(resolve)
+              .catch(reject);
+            return;
+          }
+
+          if (res.statusCode !== 200) {
+            reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+            return;
+          }
+
+          const chunks = [];
+          res.on('data', chunk => chunks.push(chunk));
+          res.on('end', () => resolve(Buffer.concat(chunks)));
+          res.on('error', reject);
+        });
+
+        req.on('error', reject);
+        req.setTimeout(60000, () => {
+          req.destroy();
+          reject(new Error('Download timeout'));
+        });
+      });
+    };
+
+    console.log('[RETRY-DOWNLOAD] Attempting direct download...');
+    const data = await downloadWithRedirects(videoUrl);
+
+    if (data.length < 10000) {
+      // Too small, probably an error page
+      console.log('[RETRY-DOWNLOAD] File too small, likely expired URL');
+      return { success: false, error: 'URL expired - video needs to be regenerated' };
+    }
+
+    // Ensure directory exists
+    const dir = path.dirname(outputPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    fs.writeFileSync(outputPath, data);
+    const sizeMb = (data.length / (1024 * 1024)).toFixed(1);
+    console.log(`[RETRY-DOWNLOAD] Success! (${sizeMb} MB)`);
+
+    return { success: true };
+  } catch (e) {
+    console.log('[RETRY-DOWNLOAD] Direct download failed:', e.message);
+    return { success: false, error: `Download failed: ${e.message}` };
+  }
 });

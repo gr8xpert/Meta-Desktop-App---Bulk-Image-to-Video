@@ -615,57 +615,86 @@ async function retryConversion(inputPath) {
 async function retryDownloads() {
   const downloadFailed = files.filter(f => f.status === 'download_failed');
 
+  console.log('[RETRY] Files with download_failed status:', downloadFailed.length);
+  console.log('[RETRY] All files:', files.map(f => ({ name: f.name, status: f.status, hasUrl: !!f.videoUrl })));
+
   if (downloadFailed.length === 0) {
     showToast('No failed downloads to retry', 'info');
     return;
   }
 
-  showToast(`Retrying ${downloadFailed.length} download(s)...`, 'info');
+  // Check if any files have missing URLs
+  const missingUrls = downloadFailed.filter(f => !f.videoUrl);
+  if (missingUrls.length > 0) {
+    showToast(`${missingUrls.length} file(s) have no stored URL - need regeneration`, 'warning');
+  }
 
-  for (const file of downloadFailed) {
+  const withUrls = downloadFailed.filter(f => f.videoUrl);
+  if (withUrls.length === 0) {
+    showToast('No valid URLs to retry. Use "Retry Generation" instead.', 'warning');
+    return;
+  }
+
+  showToast(`Retrying ${withUrls.length} download(s)...`, 'info');
+
+  for (const file of withUrls) {
     file.status = 'downloading';
     renderFileGrid();
 
     console.log(`[RETRY] Downloading ${file.name}...`);
-    console.log(`[RETRY] Video URL: ${file.videoUrl}`);
+    console.log(`[RETRY] Video URL: ${file.videoUrl?.substring(0, 100)}...`);
     console.log(`[RETRY] Output: ${file.outputPath}`);
 
-    const result = await window.api.retryDownload({
-      videoUrl: file.videoUrl,
-      outputPath: file.outputPath
-    });
+    try {
+      const result = await window.api.retryDownload({
+        videoUrl: file.videoUrl,
+        outputPath: file.outputPath
+      });
 
-    console.log(`[RETRY] Result:`, result);
+      console.log(`[RETRY] Result:`, result);
 
-    file.status = result.success ? 'completed' : 'download_failed';
-    renderFileGrid();
+      file.status = result.success ? 'completed' : 'download_failed';
+      renderFileGrid();
 
-    if (result.success) {
-      showToast(`Downloaded: ${file.name}`, 'success');
-    } else {
-      showToast(`Failed to download: ${file.name}`, 'error');
+      if (result.success) {
+        showToast(`Downloaded: ${file.name}`, 'success');
+      } else {
+        showToast(`Failed: ${file.name} - ${result.error || 'Unknown error'}`, 'error');
+      }
+    } catch (e) {
+      console.error(`[RETRY] Error:`, e);
+      file.status = 'download_failed';
+      renderFileGrid();
+      showToast(`Error: ${file.name} - ${e.message}`, 'error');
     }
   }
 }
 
-// Retry generation (for files where generation failed completely)
+// Retry generation (for files where generation failed OR download failed with no URL)
 function retryGeneration() {
-  const generationFailed = files.filter(f => f.status === 'error');
+  // Include: error status, OR download_failed without a valid URL
+  const needsRegeneration = files.filter(f =>
+    f.status === 'error' ||
+    (f.status === 'download_failed' && !f.videoUrl)
+  );
 
-  if (generationFailed.length === 0) {
-    showToast('No failed generations to retry', 'info');
+  console.log('[RETRY-GEN] Files needing regeneration:', needsRegeneration.length);
+
+  if (needsRegeneration.length === 0) {
+    showToast('No failed files to regenerate', 'info');
     return;
   }
 
   // Reset failed files to pending for re-conversion
-  generationFailed.forEach(f => {
+  needsRegeneration.forEach(f => {
     f.status = 'pending';
     f.progress = 0;
     f.videoUrl = null;
+    f.outputPath = null;
   });
 
   renderFileGrid();
-  showToast(`${generationFailed.length} file(s) queued for re-generation. Click "Start Conversion" to begin.`, 'success');
+  showToast(`${needsRegeneration.length} file(s) queued for re-generation. Click "Start Conversion" to begin.`, 'success');
 }
 
 // ============================================

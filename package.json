@@ -1,6 +1,6 @@
 {
   "name": "meta-video-converter",
-  "version": "3.0.0",
+  "version": "3.9.0",
   "description": "Convert images to AI-animated videos using Meta AI",
   "main": "src/main/main.js",
   "scripts": {
