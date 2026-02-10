@@ -29,12 +29,9 @@
       "assets/**/*"
     ],
     "win": {
-      "target": "nsis",
-      "icon": "assets/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "target": "portable",
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false
     }
   }
 }

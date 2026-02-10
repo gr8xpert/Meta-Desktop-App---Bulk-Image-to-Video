@@ -234,6 +234,8 @@ body {
   display: flex;
   gap: var(--space-xs);
   -webkit-app-region: no-drag;
+  min-width: 335px;
+  justify-content: flex-end;
 }
 
 .nav-tab {

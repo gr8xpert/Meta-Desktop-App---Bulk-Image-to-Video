@@ -349,6 +349,11 @@ ipcMain.handle('open-file', async (event, filePath) => {
   shell.openPath(filePath);
 });
 
+// Check if file exists
+ipcMain.handle('file-exists', async (event, filePath) => {
+  return fs.existsSync(filePath);
+});
+
 // Get prompt presets
 ipcMain.handle('get-presets', async () => {
   return [

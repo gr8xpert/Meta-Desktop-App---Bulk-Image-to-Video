@@ -1,106 +1,137 @@
-# Meta Video Converter
+# Meta Video Converter - Bulk Image to Video
 
-A standalone desktop application to convert images to AI-animated videos using Meta AI.
+A desktop application that converts images to AI-animated videos using Meta AI's image animation feature. Process multiple images in bulk with customizable animation presets.
 
 ## Features
 
-- **Drag & Drop** - Simply drag images or folders onto the app
-- **Thumbnail Previews** - See your images before converting
-- **Batch Processing** - Convert multiple images at once
-- **Animation Presets** - Cinematic, zoom, pan, parallax, and more
-- **Custom Prompts** - Write your own animation descriptions
-- **Resume Conversions** - Continue from where you left off after interruption
-- **Conversion History** - Track all your conversions with search
-- **Smart Rate Limiting** - Automatic delays to avoid Meta AI limits
-- **Desktop Notifications** - Get notified when batches complete
-- **Modern UI** - Beautiful glassmorphic dark theme
-
-## Requirements
-
-- Windows 10/11
-- Meta AI account with valid cookies
+- **Bulk Processing**: Convert multiple images to videos at once
+- **Drag & Drop**: Easy file/folder selection with drag and drop support
+- **Animation Presets**: Multiple built-in presets (Cinematic, Zoom, Pan, Parallax, etc.)
+- **Custom Prompts**: Create your own animation styles with custom prompts
+- **Progress Tracking**: Real-time progress with ETA estimation
+- **Conversion History**: Track all conversions with retry option for failed ones
+- **Headless Mode**: Run conversions in the background without browser window
+- **Resume Support**: Continue interrupted conversions
 
 ## Installation
 
-### From Release (Recommended)
-1. Download the latest `MetaVideoConverter-Setup.exe` from Releases
-2. Run the installer
-3. Launch "Meta Video Converter" from Start Menu
+### Prerequisites
+- Node.js 18+
+- npm or yarn
 
-### From Source
+### Setup
+
+1. Clone the repository:
 ```bash
-# Clone repository
-git clone https://github.com/gr8xpert/meta-video-converter-electron.git
-cd meta-video-converter-electron
+git clone https://github.com/gr8xpert/Meta-Desktop-App---Bulk-Image-to-Video.git
+cd Meta-Desktop-App---Bulk-Image-to-Video
+```
 
-# Install dependencies
+2. Install dependencies:
+```bash
 npm install
+```
 
-# Install Playwright browsers
-npx playwright install chromium
-
-# Run in development
+3. Run in development mode:
+```bash
 npm start
+```
 
-# Build for Windows
+4. Build portable executable:
+```bash
 npm run build:win
 ```
 
+The portable `.exe` will be created in the `dist` folder.
+
+## Configuration
+
+### Meta AI Authentication
+
+To use this app, you need to provide your Meta AI cookies:
+
+1. Go to [meta.ai](https://www.meta.ai) and log in
+2. Open DevTools (F12) → Application → Cookies → meta.ai
+3. Copy the following cookie values:
+   - `datr` (required)
+   - `abra_sess` (required)
+   - `wd` (optional)
+   - `dpr` (optional)
+4. Paste them in the Settings tab of the app
+5. Click "Validate Cookies" to verify
+
 ## Usage
 
-### 1. Get Meta AI Cookies
-1. Open [meta.ai](https://meta.ai) in your browser
-2. Make sure you're logged in
-3. Open DevTools (F12)
-4. Go to Application → Cookies → meta.ai
-5. Copy the values for `datr` and `abra_sess`
-
-### 2. Configure the App
-1. Launch Meta Video Converter
-2. Go to Settings tab
-3. Paste your cookies
-4. Click "Validate Cookies" to verify
-5. Save Settings
-
-### 3. Convert Images
-1. Drag & drop images/folder or click to browse
-2. Select output folder
-3. Choose animation preset or write custom prompt
-4. Click "Start Conversion"
-5. Watch the progress!
+1. **Add Images**: Drag & drop images/folders or click "Select Files"/"Select Folder"
+2. **Choose Output**: Select where to save the generated videos
+3. **Select Preset**: Choose an animation style or create a custom prompt
+4. **Start Conversion**: Click "Start Conversion" and wait for processing
+5. **View Results**: Check the History tab for completed videos
 
 ## Animation Presets
 
 | Preset | Description |
 |--------|-------------|
-| Cinematic | Smooth cinematic motion with dramatic camera |
-| Zoom In | Slowly zoom into the center |
-| Zoom Out | Slowly zoom out revealing more |
-| Pan Left/Right | Horizontal camera pan |
-| Parallax | Depth effect with layered motion |
-| Floating | Dreamlike ethereal movement |
-| Dramatic | Intense slow motion atmosphere |
-| Nature | Natural wind, water, wildlife motion |
+| Cinematic | Smooth cinematic motion with dramatic camera movement |
+| Zoom In | Slowly zoom into the center with subtle motion |
+| Zoom Out | Slowly zoom out revealing more of the scene |
+| Pan Left | Smooth horizontal pan from right to left |
+| Pan Right | Smooth horizontal pan from left to right |
+| Parallax | Depth effect with foreground/background moving differently |
+| Floating | Gentle floating motion, dreamlike and ethereal |
+| Dramatic | Dramatic slow motion with intense atmosphere |
+| Nature | Natural movement like wind, water, or wildlife |
 | Portrait | Subtle life-like motion for portraits |
-
-## Rate Limits
-
-Meta AI has daily generation limits (~6-10 per day). The app:
-- Adds configurable delays between conversions (default: 30 seconds)
-- Automatically pauses if rate limited
-- Can resume the next day
+| Custom | Your own custom animation prompt |
 
 ## Tech Stack
 
-- Electron 28
-- Playwright (browser automation)
-- Better-SQLite3 (history database)
-- Modern HTML/CSS/JS
+- **Electron** - Desktop application framework
+- **Playwright** - Browser automation for Meta AI interaction
+- **Node.js** - Backend runtime
 
-## Version
+## Project Structure
 
-3.0.0
+```
+meta-video-converter-electron/
+├── src/
+│   ├── main/
+│   │   ├── main.js        # Electron main process
+│   │   ├── preload.js     # Preload script for IPC
+│   │   ├── converter.js   # Meta AI automation logic
+│   │   └── database.js    # SQLite database for history
+│   └── renderer/
+│       ├── index.html     # Main UI
+│       ├── app.js         # Renderer process logic
+│       └── styles.css     # UI styling
+├── package.json
+└── README.md
+```
+
+## Troubleshooting
+
+### Cookies Invalid
+- Make sure you're logged into Meta AI in your browser
+- Copy the exact cookie values without any extra spaces
+- Cookies may expire - refresh them if validation fails
+
+### Conversion Fails
+- Check your internet connection
+- Meta AI may have rate limits - increase delay between files
+- Try disabling headless mode in Settings
+
+### Video Not Downloading
+- The app uses multiple fallback download methods
+- If headless mode fails, it will automatically retry with visible browser
 
 ## License
 
-MIT
+MIT License
+
+## Author
+
+**gr8xpert**
+
+## Disclaimer
+
+This tool is for personal use only. Please respect Meta AI's terms of service and usage limits.
