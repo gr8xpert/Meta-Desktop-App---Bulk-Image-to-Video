@@ -48,5 +48,14 @@ contextBridge.exposeInMainWorld('api', {
   stopTTIGeneration: () => ipcRenderer.invoke('stop-tti-generation'),
   onTTIProgress: (callback) => ipcRenderer.on('tti-progress', (event, data) => callback(data)),
   getTTIPresets: () => ipcRenderer.invoke('get-tti-presets'),
-  importPromptsFile: () => ipcRenderer.invoke('import-prompts-file')
+  importPromptsFile: () => ipcRenderer.invoke('import-prompts-file'),
+
+  // Gallery
+  scanGallery: (folderPath) => ipcRenderer.invoke('scan-gallery', folderPath),
+  deleteGalleryItem: (filePath) => ipcRenderer.invoke('delete-gallery-item', filePath),
+
+  // Image Editing
+  loadImageForEdit: (imagePath) => ipcRenderer.invoke('load-image-for-edit', imagePath),
+  previewImageEdit: (data) => ipcRenderer.invoke('preview-image-edit', data),
+  saveEditedImage: (data) => ipcRenderer.invoke('save-edited-image', data)
 });

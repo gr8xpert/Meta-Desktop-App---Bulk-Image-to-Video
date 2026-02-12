@@ -109,8 +109,56 @@ const elements = {
   ttiProgressBar: document.getElementById('ttiProgressBar'),
   ttiProgressStatus: document.getElementById('ttiProgressStatus'),
   btnStartTTI: document.getElementById('btnStartTTI'),
-  btnStopTTI: document.getElementById('btnStopTTI')
+  btnStopTTI: document.getElementById('btnStopTTI'),
+
+  // Gallery Elements
+  galleryGrid: document.getElementById('galleryGrid'),
+  galleryStats: document.getElementById('galleryStats'),
+  galleryCount: document.getElementById('galleryCount'),
+  btnRefreshGallery: document.getElementById('btnRefreshGallery'),
+  btnOpenGalleryFolder: document.getElementById('btnOpenGalleryFolder'),
+
+  // Image Editor Elements
+  imageEditorModal: document.getElementById('imageEditorModal'),
+  btnCloseEditor: document.getElementById('btnCloseEditor'),
+  editorPreviewImage: document.getElementById('editorPreviewImage'),
+  editorLoading: document.getElementById('editorLoading'),
+  editorBrightness: document.getElementById('editorBrightness'),
+  editorContrast: document.getElementById('editorContrast'),
+  editorSaturation: document.getElementById('editorSaturation'),
+  editorSharpness: document.getElementById('editorSharpness'),
+  editorBlur: document.getElementById('editorBlur'),
+  brightnessValue: document.getElementById('brightnessValue'),
+  contrastValue: document.getElementById('contrastValue'),
+  saturationValue: document.getElementById('saturationValue'),
+  sharpnessValue: document.getElementById('sharpnessValue'),
+  blurValue: document.getElementById('blurValue'),
+  filterGrayscale: document.getElementById('filterGrayscale'),
+  filterSepia: document.getElementById('filterSepia'),
+  filterNegative: document.getElementById('filterNegative'),
+  btnResetEditor: document.getElementById('btnResetEditor'),
+  btnSaveAsNew: document.getElementById('btnSaveAsNew'),
+  btnSaveEditor: document.getElementById('btnSaveEditor')
 };
+
+// Gallery State
+let galleryItems = [];
+let galleryFilter = 'all';
+
+// Image Editor State
+let editorImagePath = null;
+let editorOriginalBase64 = null;
+let editorEdits = {
+  brightness: 1,
+  contrast: 1,
+  saturation: 1,
+  sharpness: 0,
+  blur: 0,
+  grayscale: false,
+  sepia: false,
+  negative: false
+};
+let editorPreviewTimeout = null;
 
 // ============================================
 // Initialization
@@ -346,6 +394,10 @@ function switchTab(tabId) {
 
   if (tabId === 'history') {
     loadHistory();
+  }
+
+  if (tabId === 'gallery') {
+    loadGallery();
   }
 }
 
@@ -1256,7 +1308,448 @@ function handleTTIProgress(data) {
 }
 
 // ============================================
+// Gallery Functions
+// ============================================
+
+async function loadGallery() {
+  // Use the TTI output folder or the main output folder
+  const galleryFolder = elements.ttiOutputFolder.value || elements.outputFolder.value;
+
+  if (!galleryFolder) {
+    renderGalleryEmpty('No output folder selected. Set one in Settings or Text to Image tab.');
+    return;
+  }
+
+  elements.galleryStats.textContent = 'Scanning...';
+
+  try {
+    galleryItems = await window.api.scanGallery(galleryFolder);
+
+    // Apply filter
+    let filteredItems = galleryItems;
+    if (galleryFilter === 'images') {
+      filteredItems = galleryItems.filter(item => item.type === 'image');
+    } else if (galleryFilter === 'videos') {
+      filteredItems = galleryItems.filter(item => item.type === 'video');
+    }
+
+    const itemCount = filteredItems.length;
+    elements.galleryStats.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
+
+    if (filteredItems.length === 0) {
+      renderGalleryEmpty('No media files found in the output folder.');
+      return;
+    }
+
+    renderGallery(filteredItems);
+  } catch (e) {
+    console.error('Gallery load error:', e);
+    renderGalleryEmpty('Failed to load gallery: ' + e.message);
+  }
+}
+
+function renderGalleryEmpty(message) {
+  elements.galleryGrid.innerHTML = `
+    <div class="gallery-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <p>${message}</p>
+    </div>
+  `;
+}
+
+async function renderGallery(items) {
+  const html = await Promise.all(items.map(async (item, index) => {
+    let thumbnail = '';
+
+    if (item.type === 'image') {
+      try {
+        thumbnail = await window.api.getThumbnail(item.path);
+      } catch (e) {
+        thumbnail = '';
+      }
+    }
+
+    const sizeStr = formatFileSize(item.size);
+    const dateStr = new Date(item.created).toLocaleDateString();
+
+    return `
+      <div class="gallery-item ${item.type}" data-index="${index}" data-path="${item.path.replace(/\\/g, '\\\\')}" data-type="${item.type}">
+        <div class="gallery-item-thumb">
+          ${item.type === 'image' && thumbnail
+            ? `<img src="${thumbnail}" alt="${item.name}">`
+            : item.type === 'video'
+              ? `<div class="gallery-video-thumb">
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                </div>`
+              : '<div class="gallery-no-thumb">?</div>'
+          }
+        </div>
+        <div class="gallery-item-overlay">
+          <div class="gallery-item-actions">
+            <button class="gallery-btn gallery-btn-view" title="View">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+            ${item.type === 'image' ? `
+            <button class="gallery-btn gallery-btn-edit" title="Edit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            ` : ''}
+            <button class="gallery-btn gallery-btn-folder" title="Show in folder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+            </button>
+            <button class="gallery-btn gallery-btn-delete" title="Delete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="gallery-item-info">
+          <span class="gallery-item-name" title="${item.name}">${item.name}</span>
+          <span class="gallery-item-meta">${sizeStr} • ${dateStr}</span>
+        </div>
+        ${item.type === 'video' ? '<div class="gallery-item-badge">VIDEO</div>' : ''}
+      </div>
+    `;
+  }));
+
+  elements.galleryGrid.innerHTML = html.join('');
+
+  // Add click handlers
+  elements.galleryGrid.querySelectorAll('.gallery-item').forEach(item => {
+    const path = item.dataset.path;
+    const type = item.dataset.type;
+
+    // View button
+    item.querySelector('.gallery-btn-view').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (type === 'video') {
+        previewVideo(path);
+      } else {
+        window.api.openFile(path);
+      }
+    });
+
+    // Edit button (images only)
+    const editBtn = item.querySelector('.gallery-btn-edit');
+    if (editBtn) {
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openImageEditor(path);
+      });
+    }
+
+    // Folder button
+    item.querySelector('.gallery-btn-folder').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const folderPath = path.substring(0, path.lastIndexOf('\\'));
+      window.api.openFolder(folderPath);
+    });
+
+    // Delete button
+    item.querySelector('.gallery-btn-delete').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const itemName = galleryItems[parseInt(item.dataset.index)].name;
+      if (confirm(`Delete "${itemName}"?`)) {
+        const result = await window.api.deleteGalleryItem(path);
+        if (result.success) {
+          showToast('File deleted', 'success');
+          loadGallery();
+        } else {
+          showToast('Failed to delete: ' + result.error, 'error');
+        }
+      }
+    });
+
+    // Click on item to view
+    item.addEventListener('click', () => {
+      if (type === 'video') {
+        previewVideo(path);
+      } else {
+        window.api.openFile(path);
+      }
+    });
+  });
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function setupGalleryEventListeners() {
+  // Refresh button
+  if (elements.btnRefreshGallery) {
+    elements.btnRefreshGallery.addEventListener('click', loadGallery);
+  }
+
+  // Open folder button
+  if (elements.btnOpenGalleryFolder) {
+    elements.btnOpenGalleryFolder.addEventListener('click', () => {
+      const galleryFolder = elements.ttiOutputFolder.value || elements.outputFolder.value;
+      if (galleryFolder) {
+        window.api.openFolder(galleryFolder);
+      } else {
+        showToast('No output folder selected', 'warning');
+      }
+    });
+  }
+
+  // Filter buttons (gallery tabs)
+  document.querySelectorAll('.gallery-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.gallery-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      galleryFilter = btn.dataset.filter;
+      loadGallery();
+    });
+  });
+}
+
+// ============================================
+// Image Editor Functions
+// ============================================
+
+async function openImageEditor(imagePath) {
+  editorImagePath = imagePath;
+  resetEditorState();
+
+  // Show modal
+  elements.imageEditorModal.classList.add('active');
+  showEditorLoading(true);
+
+  try {
+    // Load image
+    const result = await window.api.loadImageForEdit(imagePath);
+    if (result.success) {
+      editorOriginalBase64 = result.base64;
+      elements.editorPreviewImage.src = result.base64;
+    } else {
+      showToast('Failed to load image: ' + result.error, 'error');
+      closeImageEditor();
+    }
+  } catch (e) {
+    showToast('Error loading image', 'error');
+    closeImageEditor();
+  } finally {
+    showEditorLoading(false);
+  }
+}
+
+function closeImageEditor() {
+  elements.imageEditorModal.classList.remove('active');
+  editorImagePath = null;
+  editorOriginalBase64 = null;
+  elements.editorPreviewImage.src = '';
+}
+
+function resetEditorState() {
+  editorEdits = {
+    brightness: 1,
+    contrast: 1,
+    saturation: 1,
+    sharpness: 0,
+    blur: 0,
+    grayscale: false,
+    sepia: false,
+    negative: false
+  };
+
+  // Reset sliders
+  elements.editorBrightness.value = 100;
+  elements.editorContrast.value = 100;
+  elements.editorSaturation.value = 100;
+  elements.editorSharpness.value = 0;
+  elements.editorBlur.value = 0;
+
+  // Update value displays
+  elements.brightnessValue.textContent = '100%';
+  elements.contrastValue.textContent = '100%';
+  elements.saturationValue.textContent = '100%';
+  elements.sharpnessValue.textContent = '0';
+  elements.blurValue.textContent = '0';
+
+  // Reset filter buttons
+  elements.filterGrayscale.classList.remove('active');
+  elements.filterSepia.classList.remove('active');
+  elements.filterNegative.classList.remove('active');
+
+  // Reset preview to original
+  if (editorOriginalBase64) {
+    elements.editorPreviewImage.src = editorOriginalBase64;
+  }
+}
+
+function showEditorLoading(show) {
+  if (show) {
+    elements.editorLoading.classList.add('active');
+  } else {
+    elements.editorLoading.classList.remove('active');
+  }
+}
+
+function updateEditorPreview() {
+  // Debounce preview updates
+  if (editorPreviewTimeout) {
+    clearTimeout(editorPreviewTimeout);
+  }
+
+  editorPreviewTimeout = setTimeout(async () => {
+    if (!editorImagePath) return;
+
+    showEditorLoading(true);
+
+    try {
+      const result = await window.api.previewImageEdit({
+        imagePath: editorImagePath,
+        edits: editorEdits
+      });
+
+      if (result.success) {
+        elements.editorPreviewImage.src = result.base64;
+      }
+    } catch (e) {
+      console.error('Preview error:', e);
+    } finally {
+      showEditorLoading(false);
+    }
+  }, 150);
+}
+
+function handleSliderChange(slider, valueElement, editKey, isPercent = true) {
+  const value = parseFloat(slider.value);
+
+  if (isPercent) {
+    editorEdits[editKey] = value / 100;
+    valueElement.textContent = `${Math.round(value)}%`;
+  } else {
+    editorEdits[editKey] = value;
+    valueElement.textContent = value.toString();
+  }
+
+  updateEditorPreview();
+}
+
+function toggleFilter(filterKey, button) {
+  editorEdits[filterKey] = !editorEdits[filterKey];
+  button.classList.toggle('active', editorEdits[filterKey]);
+  updateEditorPreview();
+}
+
+async function saveEditedImage(asNew = false) {
+  if (!editorImagePath) return;
+
+  showEditorLoading(true);
+
+  try {
+    const outputPath = asNew ? null : editorImagePath;
+    const result = await window.api.saveEditedImage({
+      imagePath: editorImagePath,
+      edits: editorEdits,
+      outputPath
+    });
+
+    if (result.success) {
+      showToast(`Image saved: ${result.outputPath.split('\\').pop()}`, 'success');
+      if (asNew) {
+        loadGallery(); // Refresh gallery to show new image
+      }
+      closeImageEditor();
+    } else {
+      showToast('Failed to save: ' + result.error, 'error');
+    }
+  } catch (e) {
+    showToast('Error saving image', 'error');
+  } finally {
+    showEditorLoading(false);
+  }
+}
+
+function setupImageEditorEventListeners() {
+  // Close button
+  elements.btnCloseEditor.addEventListener('click', closeImageEditor);
+
+  // Click on backdrop to close
+  elements.imageEditorModal.querySelector('.modal-backdrop').addEventListener('click', closeImageEditor);
+
+  // Slider event listeners
+  elements.editorBrightness.addEventListener('input', () => {
+    handleSliderChange(elements.editorBrightness, elements.brightnessValue, 'brightness', true);
+  });
+
+  elements.editorContrast.addEventListener('input', () => {
+    handleSliderChange(elements.editorContrast, elements.contrastValue, 'contrast', true);
+  });
+
+  elements.editorSaturation.addEventListener('input', () => {
+    handleSliderChange(elements.editorSaturation, elements.saturationValue, 'saturation', true);
+  });
+
+  elements.editorSharpness.addEventListener('input', () => {
+    handleSliderChange(elements.editorSharpness, elements.sharpnessValue, 'sharpness', false);
+  });
+
+  elements.editorBlur.addEventListener('input', () => {
+    handleSliderChange(elements.editorBlur, elements.blurValue, 'blur', false);
+  });
+
+  // Filter buttons
+  elements.filterGrayscale.addEventListener('click', () => {
+    toggleFilter('grayscale', elements.filterGrayscale);
+  });
+
+  elements.filterSepia.addEventListener('click', () => {
+    toggleFilter('sepia', elements.filterSepia);
+  });
+
+  elements.filterNegative.addEventListener('click', () => {
+    toggleFilter('negative', elements.filterNegative);
+  });
+
+  // Action buttons
+  elements.btnResetEditor.addEventListener('click', () => {
+    resetEditorState();
+    if (editorOriginalBase64) {
+      elements.editorPreviewImage.src = editorOriginalBase64;
+    }
+  });
+
+  elements.btnSaveAsNew.addEventListener('click', () => {
+    saveEditedImage(true);
+  });
+
+  elements.btnSaveEditor.addEventListener('click', () => {
+    saveEditedImage(false);
+  });
+
+  // Escape key to close
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && elements.imageEditorModal.classList.contains('active')) {
+      closeImageEditor();
+    }
+  });
+}
+
+// ============================================
 // Initialize
 // ============================================
 
 init();
+setupGalleryEventListeners();
+setupImageEditorEventListeners();

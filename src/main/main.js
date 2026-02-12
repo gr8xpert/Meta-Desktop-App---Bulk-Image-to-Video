@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, Notification, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const sharp = require('sharp');
 const { MetaConverter } = require('./converter');
 const { Database } = require('./database');
 
@@ -573,6 +574,215 @@ ipcMain.handle('stop-tti-generation', async () => {
     return true;
   }
   return false;
+});
+
+// ============ Gallery IPC Handlers ============
+
+// Scan gallery folder for images and videos
+ipcMain.handle('scan-gallery', async (event, folderPath) => {
+  const mediaExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov'];
+  const items = [];
+
+  if (!folderPath || !fs.existsSync(folderPath)) {
+    return [];
+  }
+
+  try {
+    const files = fs.readdirSync(folderPath);
+
+    for (const file of files) {
+      const filePath = path.join(folderPath, file);
+      const stat = fs.statSync(filePath);
+
+      if (stat.isFile()) {
+        const ext = path.extname(file).toLowerCase();
+        if (mediaExtensions.includes(ext)) {
+          const isVideo = ['.mp4', '.webm', '.mov'].includes(ext);
+          items.push({
+            name: file,
+            path: filePath,
+            type: isVideo ? 'video' : 'image',
+            size: stat.size,
+            modified: stat.mtime.getTime(),
+            created: stat.birthtime.getTime()
+          });
+        }
+      }
+    }
+
+    // Sort by creation date (newest first)
+    items.sort((a, b) => b.created - a.created);
+
+  } catch (e) {
+    console.error('Gallery scan error:', e);
+  }
+
+  return items;
+});
+
+// Delete gallery item
+ipcMain.handle('delete-gallery-item', async (event, filePath) => {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      return { success: true };
+    }
+    return { success: false, error: 'File not found' };
+  } catch (e) {
+    console.error('Delete error:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// ============ Image Editing IPC Handlers ============
+
+// Get image metadata and base64 for editing
+ipcMain.handle('load-image-for-edit', async (event, imagePath) => {
+  try {
+    const metadata = await sharp(imagePath).metadata();
+    const buffer = await sharp(imagePath).toBuffer();
+    const base64 = `data:image/${metadata.format};base64,${buffer.toString('base64')}`;
+
+    return {
+      success: true,
+      path: imagePath,
+      width: metadata.width,
+      height: metadata.height,
+      format: metadata.format,
+      base64
+    };
+  } catch (e) {
+    console.error('Load image error:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// Preview edited image (returns base64 without saving)
+ipcMain.handle('preview-image-edit', async (event, { imagePath, edits }) => {
+  try {
+    let image = sharp(imagePath);
+
+    // Apply edits
+    const { brightness, contrast, saturation, sharpness, blur, grayscale, sepia, negative } = edits;
+
+    // Modulate: brightness, saturation
+    const modulate = {};
+    if (brightness !== undefined && brightness !== 1) {
+      modulate.brightness = brightness;
+    }
+    if (saturation !== undefined && saturation !== 1) {
+      modulate.saturation = saturation;
+    }
+    if (Object.keys(modulate).length > 0) {
+      image = image.modulate(modulate);
+    }
+
+    // Linear for contrast (contrast is applied as a multiplier)
+    if (contrast !== undefined && contrast !== 1) {
+      // Contrast: multiply and offset to keep midtones stable
+      const a = contrast;
+      const b = 128 * (1 - contrast);
+      image = image.linear(a, b);
+    }
+
+    // Sharpen
+    if (sharpness !== undefined && sharpness > 0) {
+      image = image.sharpen({ sigma: sharpness });
+    }
+
+    // Blur
+    if (blur !== undefined && blur > 0) {
+      image = image.blur(blur);
+    }
+
+    // Grayscale
+    if (grayscale) {
+      image = image.grayscale();
+    }
+
+    // Sepia (tint with sepia color)
+    if (sepia) {
+      image = image.tint({ r: 112, g: 66, b: 20 });
+    }
+
+    // Negative/Invert
+    if (negative) {
+      image = image.negate();
+    }
+
+    const buffer = await image.toBuffer();
+    const metadata = await sharp(imagePath).metadata();
+    const base64 = `data:image/${metadata.format};base64,${buffer.toString('base64')}`;
+
+    return { success: true, base64 };
+  } catch (e) {
+    console.error('Preview edit error:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// Save edited image
+ipcMain.handle('save-edited-image', async (event, { imagePath, edits, outputPath }) => {
+  try {
+    let image = sharp(imagePath);
+
+    // Apply edits (same as preview)
+    const { brightness, contrast, saturation, sharpness, blur, grayscale, sepia, negative } = edits;
+
+    const modulate = {};
+    if (brightness !== undefined && brightness !== 1) {
+      modulate.brightness = brightness;
+    }
+    if (saturation !== undefined && saturation !== 1) {
+      modulate.saturation = saturation;
+    }
+    if (Object.keys(modulate).length > 0) {
+      image = image.modulate(modulate);
+    }
+
+    if (contrast !== undefined && contrast !== 1) {
+      const a = contrast;
+      const b = 128 * (1 - contrast);
+      image = image.linear(a, b);
+    }
+
+    if (sharpness !== undefined && sharpness > 0) {
+      image = image.sharpen({ sigma: sharpness });
+    }
+
+    if (blur !== undefined && blur > 0) {
+      image = image.blur(blur);
+    }
+
+    if (grayscale) {
+      image = image.grayscale();
+    }
+
+    if (sepia) {
+      image = image.tint({ r: 112, g: 66, b: 20 });
+    }
+
+    if (negative) {
+      image = image.negate();
+    }
+
+    // Determine output path
+    let savePath = outputPath;
+    if (!savePath) {
+      // Save as new file with _edited suffix
+      const ext = path.extname(imagePath);
+      const base = path.basename(imagePath, ext);
+      const dir = path.dirname(imagePath);
+      savePath = path.join(dir, `${base}_edited${ext}`);
+    }
+
+    await image.toFile(savePath);
+
+    return { success: true, outputPath: savePath };
+  } catch (e) {
+    console.error('Save edited image error:', e);
+    return { success: false, error: e.message };
+  }
 });
 
 // Retry failed download - uses direct HTTPS download (no browser needed)

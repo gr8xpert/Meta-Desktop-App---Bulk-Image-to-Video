@@ -42,6 +42,9 @@ class Database {
       error: entry.error || null,
       prompt: entry.prompt || null,
       attempts: entry.attempts || 1,
+      type: entry.type || 'video',  // 'video' or 'tti'
+      aspectRatio: entry.aspectRatio || null,
+      videoUrl: entry.videoUrl || null,
       createdAt: new Date().toISOString()
     };
 
@@ -62,7 +65,12 @@ class Database {
     let filtered = this.data.entries;
 
     if (status && status !== 'all') {
-      filtered = filtered.filter(e => e.status === status);
+      if (status === 'tti') {
+        // Filter by type instead of status
+        filtered = filtered.filter(e => e.type === 'tti');
+      } else {
+        filtered = filtered.filter(e => e.status === status);
+      }
     }
 
     if (search) {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file:; media-src 'self' file:;">
   <title>Meta Video Converter</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,6 +35,7 @@
       <nav class="nav-tabs">
         <button class="nav-tab active" data-tab="convert">Convert</button>
         <button class="nav-tab" data-tab="tti">Text to Image</button>
+        <button class="nav-tab" data-tab="gallery">Gallery</button>
         <button class="nav-tab" data-tab="history">History</button>
         <button class="nav-tab" data-tab="settings">Settings</button>
       </nav>
@@ -379,6 +380,49 @@
         </div>
       </section>
 
+      <!-- Gallery Tab -->
+      <section class="tab-content" id="tab-gallery">
+        <div class="gallery-container">
+          <div class="gallery-header">
+            <h2>Gallery</h2>
+            <div class="gallery-filters">
+              <div class="gallery-tabs">
+                <button class="gallery-tab active" data-filter="all">All</button>
+                <button class="gallery-tab" data-filter="images">Images</button>
+                <button class="gallery-tab" data-filter="videos">Videos</button>
+              </div>
+              <button class="btn btn-secondary btn-sm" id="btnRefreshGallery">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+                Refresh
+              </button>
+              <button class="btn btn-ghost btn-sm" id="btnOpenGalleryFolder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                Open Folder
+              </button>
+            </div>
+          </div>
+          <div class="gallery-stats" id="galleryStats">
+            <span id="galleryCount">0 items</span>
+          </div>
+          <div class="gallery-grid" id="galleryGrid">
+            <div class="gallery-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <p>No media files found</p>
+              <p class="text-muted">Generated images and videos will appear here</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- History Tab -->
       <section class="tab-content" id="tab-history">
         <div class="history-container">
@@ -500,6 +544,122 @@
           </svg>
         </button>
         <video id="previewVideo" controls></video>
+      </div>
+    </div>
+
+    <!-- Image Editor Modal -->
+    <div class="modal" id="imageEditorModal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-editor">
+        <div class="editor-header">
+          <h2>Image Editor</h2>
+          <button class="modal-close" id="btnCloseEditor">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="editor-body">
+          <!-- Preview Area -->
+          <div class="editor-preview">
+            <img id="editorPreviewImage" alt="Preview">
+            <div class="editor-loading" id="editorLoading">
+              <div class="spinner"></div>
+              <span>Processing...</span>
+            </div>
+          </div>
+
+          <!-- Controls Panel -->
+          <div class="editor-controls">
+            <div class="editor-section">
+              <h3>Adjustments</h3>
+
+              <div class="editor-slider-group">
+                <div class="editor-slider-header">
+                  <label>Brightness</label>
+                  <span class="editor-slider-value" id="brightnessValue">100%</span>
+                </div>
+                <input type="range" id="editorBrightness" min="0" max="200" value="100" class="editor-slider">
+              </div>
+
+              <div class="editor-slider-group">
+                <div class="editor-slider-header">
+                  <label>Contrast</label>
+                  <span class="editor-slider-value" id="contrastValue">100%</span>
+                </div>
+                <input type="range" id="editorContrast" min="0" max="200" value="100" class="editor-slider">
+              </div>
+
+              <div class="editor-slider-group">
+                <div class="editor-slider-header">
+                  <label>Saturation</label>
+                  <span class="editor-slider-value" id="saturationValue">100%</span>
+                </div>
+                <input type="range" id="editorSaturation" min="0" max="200" value="100" class="editor-slider">
+              </div>
+
+              <div class="editor-slider-group">
+                <div class="editor-slider-header">
+                  <label>Sharpness</label>
+                  <span class="editor-slider-value" id="sharpnessValue">0</span>
+                </div>
+                <input type="range" id="editorSharpness" min="0" max="10" value="0" step="0.5" class="editor-slider">
+              </div>
+
+              <div class="editor-slider-group">
+                <div class="editor-slider-header">
+                  <label>Blur</label>
+                  <span class="editor-slider-value" id="blurValue">0</span>
+                </div>
+                <input type="range" id="editorBlur" min="0" max="10" value="0" step="0.5" class="editor-slider">
+              </div>
+            </div>
+
+            <div class="editor-section">
+              <h3>Filters</h3>
+              <div class="editor-filters">
+                <button class="editor-filter-btn" id="filterGrayscale" data-filter="grayscale">
+                  <span class="filter-preview grayscale"></span>
+                  <span>Grayscale</span>
+                </button>
+                <button class="editor-filter-btn" id="filterSepia" data-filter="sepia">
+                  <span class="filter-preview sepia"></span>
+                  <span>Sepia</span>
+                </button>
+                <button class="editor-filter-btn" id="filterNegative" data-filter="negative">
+                  <span class="filter-preview negative"></span>
+                  <span>Negative</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="editor-actions">
+              <button class="btn btn-ghost" id="btnResetEditor">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+                Reset
+              </button>
+              <button class="btn btn-secondary" id="btnSaveAsNew">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                  <polyline points="17 21 17 13 7 13 7 21"/>
+                  <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                Save as New
+              </button>
+              <button class="btn btn-primary" id="btnSaveEditor">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
