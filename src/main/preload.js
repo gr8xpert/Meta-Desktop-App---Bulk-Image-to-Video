@@ -41,5 +41,12 @@ contextBridge.exposeInMainWorld('api', {
   closeWindow: () => ipcRenderer.invoke('close-window'),
 
   // Retry download
-  retryDownload: (data) => ipcRenderer.invoke('retry-download', data)
+  retryDownload: (data) => ipcRenderer.invoke('retry-download', data),
+
+  // Text-to-Image
+  startTTIGeneration: (options) => ipcRenderer.invoke('start-tti-generation', options),
+  stopTTIGeneration: () => ipcRenderer.invoke('stop-tti-generation'),
+  onTTIProgress: (callback) => ipcRenderer.on('tti-progress', (event, data) => callback(data)),
+  getTTIPresets: () => ipcRenderer.invoke('get-tti-presets'),
+  importPromptsFile: () => ipcRenderer.invoke('import-prompts-file')
 });

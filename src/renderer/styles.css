@@ -234,7 +234,7 @@ body {
   display: flex;
   gap: var(--space-xs);
   -webkit-app-region: no-drag;
-  min-width: 335px;
+  min-width: 450px;
   justify-content: flex-end;
 }
 
@@ -1072,6 +1072,10 @@ select {
   color: var(--text-muted);
 }
 
+.history-item-tti {
+  border-left: 3px solid var(--accent-primary);
+}
+
 /* ============================================
    Settings Tab
    ============================================ */
@@ -1268,6 +1272,362 @@ select {
    App Footer
    ============================================ */
 
+/* ============================================
+   Text-to-Image Tab
+   ============================================ */
+
+.tti-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: var(--space-lg);
+  height: 100%;
+}
+
+.panel-tti-input {
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-tti-controls {
+  padding: var(--space-lg);
+  gap: var(--space-lg);
+}
+
+.tti-input-section {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.tti-input-row {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-end;
+  margin-bottom: var(--space-sm);
+}
+
+.tti-input-row .input-group {
+  margin-bottom: 0;
+}
+
+.tti-input-row > .btn {
+  padding: var(--space-sm) var(--space-md);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Aspect Ratio Buttons - Compact Inline Style */
+.ratio-buttons {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.ratio-btn {
+  flex: 1;
+  padding: var(--space-sm) var(--space-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+}
+
+.ratio-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--glass-highlight);
+}
+
+.ratio-btn.active {
+  background: var(--accent-subtle);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.ratio-btn span:nth-child(2) {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ratio-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.ratio-btn.active .ratio-label {
+  color: var(--accent-secondary);
+}
+
+/* Ratio Icons - Smaller */
+.ratio-icon {
+  width: 20px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+}
+
+.ratio-icon.ratio-16-9 {
+  width: 20px;
+  height: 11px;
+}
+
+.ratio-icon.ratio-9-16 {
+  width: 11px;
+  height: 20px;
+}
+
+.ratio-icon.ratio-1-1 {
+  width: 14px;
+  height: 14px;
+}
+
+/* Prompt Queue */
+.tti-queue-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  overflow: hidden;
+}
+
+.queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.queue-header h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.prompt-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm) var(--space-md);
+}
+
+.prompt-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.prompt-list-empty svg {
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--space-sm);
+  opacity: 0.5;
+}
+
+.prompt-list-empty p {
+  margin: var(--space-xs) 0;
+  font-size: 13px;
+}
+
+.prompt-list-empty .text-muted {
+  font-size: 11px;
+}
+
+/* Prompt Cards */
+.prompt-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
+  border-left: 3px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.prompt-card:hover {
+  background: var(--glass-highlight);
+}
+
+.prompt-card.pending {
+  border-left-color: var(--text-muted);
+}
+
+.prompt-card.generating {
+  border-left-color: var(--warning);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.prompt-card.completed {
+  border-left-color: var(--success);
+}
+
+.prompt-card.failed {
+  border-left-color: var(--danger);
+}
+
+.prompt-card-number {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  background: var(--glass-bg);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.prompt-card.generating .prompt-card-number {
+  background: var(--warning);
+  color: white;
+  animation: pulse 1.5s infinite;
+}
+
+.prompt-card.completed .prompt-card-number {
+  background: var(--success);
+  color: white;
+}
+
+.prompt-card.failed .prompt-card-number {
+  background: var(--danger);
+  color: white;
+}
+
+.prompt-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.prompt-card-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.prompt-card-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.prompt-card-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.prompt-card-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.prompt-card-actions button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.prompt-card-actions button:hover {
+  background: var(--glass-highlight);
+  color: var(--text-primary);
+}
+
+.prompt-card-actions button.btn-remove:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--danger);
+}
+
+.prompt-card-actions button svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* TTI Video Options */
+.tti-video-options {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--glass-border);
+}
+
+/* Full Width Button */
+.btn-full {
+  width: 100%;
+}
+
+/* TTI specific input group spacing */
+.tti-input-section .input-group {
+  margin-bottom: var(--space-sm);
+}
+
+.tti-input-section .input-group:last-child {
+  margin-bottom: 0;
+}
+
+/* Smaller import button */
+.tti-input-section .btn-secondary {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 12px;
+}
+
+/* Prompt Progress Indicator */
+.prompt-progress {
+  width: 100%;
+  height: 3px;
+  background: var(--glass-border);
+  border-radius: 2px;
+  margin-top: var(--space-sm);
+  overflow: hidden;
+}
+
+.prompt-progress-bar {
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Image Preview in Prompt Card */
+.prompt-card-preview {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.prompt-card-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* App Footer */
 .app-footer {
   position: fixed;
   bottom: 0;

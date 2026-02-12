@@ -1,6 +1,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 
 class MetaConverter {
   constructor(cookies, options = {}) {
@@ -22,6 +23,104 @@ class MetaConverter {
 
   isRunning() {
     return this._running;
+  }
+
+  // Map aspect ratio to Meta AI orientation value
+  _getOrientationFromRatio(ratio) {
+    const orientationMap = {
+      '16:9': 'LANDSCAPE',
+      '9:16': 'VERTICAL',
+      '1:1': 'SQUARE'
+    };
+    return orientationMap[ratio] || 'VERTICAL';
+  }
+
+  // Set up request interception to inject orientation into GraphQL requests
+  async _setupOrientationInterceptor(orientation) {
+    console.log(`[INTERCEPT] Setting up orientation interceptor: ${orientation}`);
+
+    // Remove any existing route handler first
+    try {
+      await this.page.unroute('**/api/graphql');
+    } catch (e) {
+      // No existing route, that's fine
+    }
+
+    // Intercept GraphQL requests and inject orientation
+    await this.page.route('**/api/graphql', async (route, request) => {
+      const postData = request.postData();
+
+      // Check if this is a TEXT_TO_IMAGE request
+      if (postData && postData.includes('TEXT_TO_IMAGE')) {
+        console.log('[INTERCEPT] Found TEXT_TO_IMAGE request, injecting orientation...');
+        console.log('[INTERCEPT] Original request (first 500 chars):', postData.substring(0, 500));
+
+        try {
+          // Parse the request body
+          let body = JSON.parse(postData);
+          let modified = false;
+
+          // Helper function to recursively find and modify textToImageParams
+          const injectOrientation = (obj) => {
+            if (!obj || typeof obj !== 'object') return;
+
+            // Check if this object has textToImageParams
+            if (obj.textToImageParams) {
+              obj.textToImageParams.orientation = orientation;
+              console.log(`[INTERCEPT] Injected orientation at textToImageParams level: ${orientation}`);
+              modified = true;
+              return;
+            }
+
+            // Check if this object has imagineOperationRequest
+            if (obj.imagineOperationRequest && obj.imagineOperationRequest.textToImageParams) {
+              obj.imagineOperationRequest.textToImageParams.orientation = orientation;
+              console.log(`[INTERCEPT] Injected orientation at imagineOperationRequest level: ${orientation}`);
+              modified = true;
+              return;
+            }
+
+            // Recurse into nested objects
+            for (const key of Object.keys(obj)) {
+              if (typeof obj[key] === 'object' && obj[key] !== null) {
+                injectOrientation(obj[key]);
+              }
+            }
+          };
+
+          injectOrientation(body);
+
+          if (modified) {
+            console.log('[INTERCEPT] Modified request (first 500 chars):', JSON.stringify(body).substring(0, 500));
+          } else {
+            console.log('[INTERCEPT] WARNING: Could not find textToImageParams to inject orientation');
+          }
+
+          // Continue with modified request
+          await route.continue({
+            postData: JSON.stringify(body)
+          });
+          return;
+        } catch (e) {
+          console.log('[INTERCEPT] Failed to parse/modify request:', e.message);
+        }
+      }
+
+      // For non-matching requests, continue normally
+      await route.continue();
+    });
+
+    console.log('[INTERCEPT] Orientation interceptor active');
+  }
+
+  // Remove the interceptor
+  async _removeOrientationInterceptor() {
+    try {
+      await this.page.unroute('**/api/graphql');
+      console.log('[INTERCEPT] Removed orientation interceptor');
+    } catch (e) {
+      // Ignore errors
+    }
   }
 
   async start() {
@@ -151,6 +250,51 @@ class MetaConverter {
     } catch (e) {
       await this.page.goto('https://www.meta.ai', { waitUntil: 'domcontentloaded', timeout: 30000 });
       await this.page.waitForTimeout(2000);
+    }
+  }
+
+  async _goToImageCreator() {
+    console.log('[NAV] Going to image creator (meta.ai/media)...');
+
+    await this.page.goto('https://www.meta.ai/media', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+
+    // Wait for page to fully render
+    await this.page.waitForTimeout(3000);
+
+    // Click on input area to activate the UI (lazy-loaded components)
+    const inputSelectors = [
+      'textarea[placeholder*="Describe"]',
+      'textarea[placeholder*="describe"]',
+      'div[contenteditable="true"]',
+      '[data-placeholder*="Describe"]',
+      'input[placeholder*="image"]',
+      'textarea'
+    ];
+
+    for (const selector of inputSelectors) {
+      try {
+        const input = this.page.locator(selector).first();
+        if (await input.count() > 0 && await input.isVisible()) {
+          await input.click();
+          await this.page.waitForTimeout(1000);
+          console.log('[NAV] Clicked input to activate UI');
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    // Save debug screenshot to help diagnose issues
+    try {
+      const debugPath = path.join(process.cwd(), 'debug_media_page.png');
+      await this.page.screenshot({ path: debugPath });
+      console.log(`[NAV] Debug screenshot saved: ${debugPath}`);
+    } catch (e) {
+      console.log('[NAV] Could not save debug screenshot:', e.message);
     }
   }
 
@@ -543,6 +687,557 @@ class MetaConverter {
       } catch (e) {
         result.error = e.message;
         console.log(`[ERROR] ${e.message}`);
+
+        if (attempt < this.retryAttempts) {
+          await this.page.waitForTimeout(2000);
+          try {
+            await this._goToHome();
+          } catch (e) {}
+        }
+      }
+    }
+
+    update(`Failed after ${this.retryAttempts} attempts`, -1);
+    return result;
+  }
+
+  // ============================================
+  // Text-to-Image Methods
+  // ============================================
+
+  async _selectImageMode() {
+    console.log('[MODE] Switching to Image...');
+
+    // Wait for page to be ready
+    await this.page.waitForTimeout(1000);
+
+    // Look for mode selector dropdown first (might show "Video" or "Image")
+    const modeDropdownSelectors = [
+      '[aria-haspopup="listbox"]',
+      '[aria-haspopup="menu"]',
+      'button:has-text("Video")',
+      'button:has-text("Image")',
+      'div[role="button"]:has-text("Video")',
+      'div[role="button"]:has-text("Image")',
+      '[data-testid*="mode"]',
+      '[aria-label*="mode" i]'
+    ];
+
+    // Try to click dropdown to open options
+    for (const selector of modeDropdownSelectors) {
+      try {
+        const dropdown = this.page.locator(selector).first();
+        if (await dropdown.count() > 0 && await dropdown.isVisible()) {
+          await dropdown.click();
+          await this.page.waitForTimeout(600);
+          console.log(`[MODE] Clicked dropdown: ${selector}`);
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    // Now select "Image" option
+    const imageSelectors = [
+      'div[role="option"]:has-text("Image")',
+      'div[role="menuitem"]:has-text("Image")',
+      'li:has-text("Image")',
+      'span:text-is("Image")',
+      'button:has-text("Image")',
+      'div[role="button"]:has-text("Image")',
+      'text=Image'
+    ];
+
+    for (const selector of imageSelectors) {
+      try {
+        const options = this.page.locator(selector);
+        const count = await options.count();
+
+        for (let i = 0; i < count; i++) {
+          const option = options.nth(i);
+          if (await option.isVisible()) {
+            await option.click();
+            await this.page.waitForTimeout(800);
+            console.log(`[MODE] Image mode selected via: ${selector}`);
+            return true;
+          }
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    console.log('[MODE] Could not find Image button, may already be in image mode');
+    return false;
+  }
+
+  async _selectAspectRatio(ratio) {
+    console.log(`[RATIO] Attempting to select ${ratio}...`);
+
+    // Wait for page to be ready after clicking input
+    await this.page.waitForTimeout(1500);
+
+    // First, let's log all visible buttons to help debug
+    try {
+      const allButtons = await this.page.locator('button').all();
+      console.log(`[RATIO] Found ${allButtons.length} buttons on page`);
+      for (let i = 0; i < Math.min(allButtons.length, 10); i++) {
+        try {
+          const text = await allButtons[i].textContent();
+          const visible = await allButtons[i].isVisible();
+          if (visible && text.trim()) {
+            console.log(`[RATIO]   Button ${i}: "${text.trim().substring(0, 30)}"`);
+          }
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.log('[RATIO] Could not enumerate buttons:', e.message);
+    }
+
+    // On meta.ai/media, there's a ratio button showing current ratio (e.g., "9:16")
+    // We need to click it to open dropdown, then select our desired ratio
+
+    // Step 1: Click on the current ratio button to open the dropdown
+    const currentRatioSelectors = [
+      // Exact text matches for ratio buttons
+      'button:has-text("9:16")',
+      'button:has-text("16:9")',
+      'button:has-text("1:1")',
+      // Role-based buttons
+      'div[role="button"]:has-text("9:16")',
+      'div[role="button"]:has-text("16:9")',
+      'div[role="button"]:has-text("1:1")',
+      // Span with ratio text inside button
+      'button:has(span:has-text("9:16"))',
+      'button:has(span:has-text("16:9"))',
+      'button:has(span:has-text("1:1"))',
+      // Aria labels
+      '[aria-label*="aspect" i]',
+      '[aria-label*="ratio" i]',
+      '[aria-label*="9:16"]',
+      '[aria-label*="16:9"]',
+      '[aria-label*="1:1"]',
+      // Data attributes
+      '[data-testid*="ratio" i]',
+      '[data-testid*="aspect" i]'
+    ];
+
+    let dropdownOpened = false;
+
+    for (const selector of currentRatioSelectors) {
+      try {
+        const btn = this.page.locator(selector).first();
+        if (await btn.count() > 0 && await btn.isVisible()) {
+          console.log(`[RATIO] Found ratio button via: ${selector}`);
+          await btn.click();
+          await this.page.waitForTimeout(1000);
+          dropdownOpened = true;
+          console.log(`[RATIO] Clicked ratio dropdown`);
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    if (!dropdownOpened) {
+      console.log('[RATIO] Could not find ratio dropdown button - UI may not be loaded');
+      console.log('[RATIO] Will rely on post-processing crop as fallback');
+      return false;
+    }
+
+    // Step 2: Select the desired ratio from the dropdown
+    await this.page.waitForTimeout(500);
+
+    const ratioOptionSelectors = [
+      `text="${ratio}"`,
+      `button:has-text("${ratio}")`,
+      `div[role="option"]:has-text("${ratio}")`,
+      `div[role="menuitem"]:has-text("${ratio}")`,
+      `li:has-text("${ratio}")`,
+      `span:text-is("${ratio}")`,
+      `div:has-text("${ratio}"):not(:has(*))`
+    ];
+
+    for (const selector of ratioOptionSelectors) {
+      try {
+        const options = this.page.locator(selector);
+        const count = await options.count();
+
+        for (let i = 0; i < count; i++) {
+          const option = options.nth(i);
+          if (await option.isVisible()) {
+            await option.click();
+            await this.page.waitForTimeout(500);
+            console.log(`[RATIO] Selected ${ratio} via: ${selector}`);
+            return true;
+          }
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    console.log(`[RATIO] Could not select ${ratio} from dropdown - will use crop fallback`);
+    return false;
+  }
+
+  async _typeImagePrompt(prompt) {
+    console.log(`[PROMPT] Typing: ${prompt.substring(0, 50)}...`);
+
+    const inputSelectors = [
+      'textarea[placeholder*="Describe" i]',
+      'textarea[placeholder*="image" i]',
+      'div[contenteditable="true"]',
+      'input[placeholder*="image" i]',
+      'textarea'
+    ];
+
+    for (const selector of inputSelectors) {
+      try {
+        const elem = this.page.locator(selector).first();
+        if (await elem.count() > 0 && await elem.isVisible()) {
+          await elem.fill(prompt);
+          await this.page.waitForTimeout(500);
+          console.log('[PROMPT] Entered successfully');
+          return true;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    console.log('[PROMPT] Could not find input field');
+    return false;
+  }
+
+  async _submitImagePrompt() {
+    console.log('[SUBMIT] Clicking send button...');
+
+    const submitSelectors = [
+      'button[aria-label="Send"]',
+      'button[aria-label*="send" i]',
+      'div[role="button"][aria-label*="send" i]',
+      'button[type="submit"]',
+      'button:has(svg)'  // Blue circular button with icon
+    ];
+
+    for (const selector of submitSelectors) {
+      try {
+        const btn = this.page.locator(selector).last(); // Get the last matching (usually the send button)
+        if (await btn.count() > 0 && await btn.isVisible()) {
+          await btn.click();
+          console.log('[SUBMIT] Clicked send button');
+          return true;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    // Try pressing Enter as fallback
+    try {
+      await this.page.keyboard.press('Enter');
+      console.log('[SUBMIT] Pressed Enter');
+      return true;
+    } catch (e) {
+      console.log('[SUBMIT] Could not submit');
+      return false;
+    }
+  }
+
+  // Capture all existing image URLs on the page (to exclude them later)
+  async _captureExistingImageUrls() {
+    const existingUrls = new Set();
+
+    const imageSelectors = [
+      'img[src*="scontent"]',
+      'img[src*="fbcdn.net"]',
+      'img[src*="lookaside"]'
+    ];
+
+    for (const selector of imageSelectors) {
+      try {
+        const images = this.page.locator(selector);
+        const count = await images.count();
+
+        for (let i = 0; i < count; i++) {
+          const img = images.nth(i);
+          const src = await img.getAttribute('src');
+          if (src) {
+            // Store a normalized version (without query params that might change)
+            const baseUrl = src.split('?')[0];
+            existingUrls.add(baseUrl);
+          }
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    }
+
+    console.log(`[IMAGE] Captured ${existingUrls.size} existing images on page`);
+    return existingUrls;
+  }
+
+  async _waitForImage(timeout = 120, existingUrls = new Set()) {
+    console.log(`[IMAGE] Waiting for NEW image (max ${timeout}s, excluding ${existingUrls.size} existing)...`);
+
+    const startTime = Date.now();
+    let lastLog = 0;
+
+    while ((Date.now() - startTime) / 1000 < timeout) {
+      if (!this._running) return null;
+
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+
+      // Log every 15 seconds
+      if (elapsed - lastLog >= 15) {
+        console.log(`[IMAGE] ${elapsed}s elapsed...`);
+        lastLog = elapsed;
+      }
+
+      // Minimum wait: 10 seconds for generation to start
+      if (elapsed < 10) {
+        await this.page.waitForTimeout(2000);
+        continue;
+      }
+
+      // Look for generated images
+      const imageSelectors = [
+        'img[src*="scontent"]',
+        'img[src*="fbcdn.net"]',
+        'img[src*="lookaside"]'
+      ];
+
+      for (const selector of imageSelectors) {
+        try {
+          const images = this.page.locator(selector);
+          const count = await images.count();
+
+          for (let i = 0; i < count; i++) {
+            const img = images.nth(i);
+            const src = await img.getAttribute('src');
+
+            if (!src || (!src.includes('scontent') && !src.includes('fbcdn') && !src.includes('lookaside'))) {
+              continue;
+            }
+
+            // Check if this is a NEW image (not in existing set)
+            const baseUrl = src.split('?')[0];
+            if (existingUrls.has(baseUrl)) {
+              continue; // Skip existing images
+            }
+
+            // Get dimensions to verify it's a generated image (not UI element)
+            const dimensions = await img.evaluate(el => ({
+              width: el.naturalWidth || el.width,
+              height: el.naturalHeight || el.height
+            }));
+
+            // Must be at least 400px to be a generated image
+            if (dimensions.width > 400 && dimensions.height > 400) {
+              console.log(`[IMAGE] Found NEW generated image: ${dimensions.width}x${dimensions.height}`);
+              console.log(`[IMAGE] URL: ${src.substring(0, 100)}...`);
+              await this.page.waitForTimeout(1500);
+              return src;
+            }
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      await this.page.waitForTimeout(2000);
+    }
+
+    console.log('[IMAGE] Timeout!');
+    return null;
+  }
+
+  async _downloadImage(imageUrl, outputPath) {
+    console.log(`[DOWNLOAD] Saving image to ${path.basename(outputPath)}...`);
+
+    try {
+      const response = await this.page.request.get(imageUrl);
+      console.log(`[DOWNLOAD] HTTP status: ${response.status()}`);
+
+      if (response.ok()) {
+        const dir = path.dirname(outputPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+
+        const body = await response.body();
+        fs.writeFileSync(outputPath, body);
+        const sizeKb = body.length / 1024;
+        console.log(`[DOWNLOAD] Done (${sizeKb.toFixed(1)} KB)`);
+        return true;
+      } else {
+        console.log(`[DOWNLOAD] Failed: HTTP ${response.status()}`);
+      }
+    } catch (e) {
+      console.log('[DOWNLOAD] Error:', e.message);
+    }
+
+    return false;
+  }
+
+  async _cropToAspectRatio(inputPath, outputPath, targetRatio) {
+    console.log(`[CROP] Cropping image to ${targetRatio}...`);
+
+    try {
+      const image = sharp(inputPath);
+      const metadata = await image.metadata();
+      const { width, height } = metadata;
+
+      console.log(`[CROP] Original dimensions: ${width}x${height}`);
+
+      let newWidth, newHeight, left, top;
+
+      if (targetRatio === '16:9') {
+        // Crop to 16:9 landscape from portrait (9:16)
+        // Calculate the height that would give us 16:9 with the current width
+        newHeight = Math.floor(width * 9 / 16);
+        newWidth = width;
+
+        // If the calculated height is larger than actual height, adjust
+        if (newHeight > height) {
+          newHeight = height;
+          newWidth = Math.floor(height * 16 / 9);
+        }
+
+        left = Math.floor((width - newWidth) / 2);
+        top = Math.floor((height - newHeight) / 2);
+      } else if (targetRatio === '1:1') {
+        // Crop to square
+        const size = Math.min(width, height);
+        newWidth = size;
+        newHeight = size;
+        left = Math.floor((width - size) / 2);
+        top = Math.floor((height - size) / 2);
+      } else {
+        // 9:16 - no crop needed (Meta AI default)
+        console.log('[CROP] 9:16 is default, no cropping needed');
+        return inputPath;
+      }
+
+      console.log(`[CROP] Cropping to: ${newWidth}x${newHeight} (offset: ${left}, ${top})`);
+
+      await image
+        .extract({ left, top, width: newWidth, height: newHeight })
+        .toFile(outputPath);
+
+      // Get final file size
+      const stats = fs.statSync(outputPath);
+      const sizeKb = stats.size / 1024;
+      console.log(`[CROP] Done! Output: ${path.basename(outputPath)} (${sizeKb.toFixed(1)} KB)`);
+
+      return outputPath;
+    } catch (e) {
+      console.error('[CROP] Error:', e.message);
+      // Return original path if crop fails
+      return inputPath;
+    }
+  }
+
+  async textToImage(prompt, outputPath, options = {}) {
+    const { aspectRatio = '16:9', progressCallback } = options;
+
+    const result = {
+      success: false,
+      imageUrl: null,
+      outputPath,
+      error: null,
+      attempts: 0,
+      orientationSet: false
+    };
+
+    const update = (stage, percent) => {
+      if (progressCallback) {
+        progressCallback(stage, percent);
+      }
+    };
+
+    // Get the orientation value for Meta AI API
+    const orientation = this._getOrientationFromRatio(aspectRatio);
+    console.log(`[TTI] Target aspect ratio: ${aspectRatio} -> orientation: ${orientation}`);
+
+    for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
+      if (!this._running) break;
+
+      result.attempts = attempt;
+
+      try {
+        if (attempt > 1) {
+          console.log(`[RETRY] Attempt ${attempt}/${this.retryAttempts}`);
+          update(`Retry ${attempt}/${this.retryAttempts}...`, 5);
+        }
+
+        if (!this.browser) {
+          update('Starting browser...', 5);
+          await this.start();
+        }
+
+        update('Opening image creator...', 10);
+        await this._goToImageCreator();
+
+        // Set up request interceptor to inject orientation
+        update(`Setting orientation (${orientation})...`, 20);
+        await this._setupOrientationInterceptor(orientation);
+        result.orientationSet = true;
+
+        update('Entering prompt...', 35);
+        if (!await this._typeImagePrompt(prompt)) {
+          throw new Error('Failed to enter prompt');
+        }
+
+        // Capture existing images BEFORE submitting (so we can find the NEW one)
+        const existingImages = await this._captureExistingImageUrls();
+
+        update('Generating image...', 45);
+        await this._submitImagePrompt();
+
+        // Wait for a NEW image (not in the existing set)
+        const imageUrl = await this._waitForImage(120, existingImages);
+
+        // Remove interceptor after request is made
+        await this._removeOrientationInterceptor();
+
+        if (!imageUrl) {
+          // Save debug screenshot
+          try {
+            const debugPath = outputPath.replace(/\.[^.]+$/, '_debug.png');
+            await this.page.screenshot({ path: debugPath });
+            console.log(`[DEBUG] Screenshot saved: ${debugPath}`);
+          } catch (e) {}
+
+          throw new Error('Image generation timed out - could not detect image URL');
+        }
+
+        result.imageUrl = imageUrl;
+
+        update('Downloading image...', 85);
+        const downloadSuccess = await this._downloadImage(imageUrl, outputPath);
+
+        if (downloadSuccess) {
+          update('Complete!', 100);
+          result.success = true;
+          return result;
+        } else {
+          result.success = false;
+          result.imageUrl = imageUrl;
+          result.downloadFailed = true;
+          result.error = 'Download failed after retries';
+          return result;
+        }
+
+      } catch (e) {
+        result.error = e.message;
+        console.log(`[ERROR] ${e.message}`);
+
+        // Clean up interceptor on error
+        await this._removeOrientationInterceptor();
 
         if (attempt < this.retryAttempts) {
           await this.page.waitForTimeout(2000);

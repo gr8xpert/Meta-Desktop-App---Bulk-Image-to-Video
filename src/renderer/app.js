@@ -8,6 +8,13 @@ let presets = [];
 let isConverting = false;
 let config = {};
 
+// TTI State
+let ttiPrompts = [];           // Array of { id, text, status, progress }
+let ttiPresets = [];           // Style presets from main process
+let selectedRatio = '16:9';    // Current aspect ratio
+let isTTIGenerating = false;
+let ttiPromptIdCounter = 0;
+
 // DOM Elements
 const elements = {
   // Tabs
@@ -78,7 +85,31 @@ const elements = {
   btnCloseModal: document.getElementById('btnCloseModal'),
 
   // Toast
-  toastContainer: document.getElementById('toastContainer')
+  toastContainer: document.getElementById('toastContainer'),
+
+  // TTI Elements
+  ttiPromptInput: document.getElementById('ttiPromptInput'),
+  ttiStylePreset: document.getElementById('ttiStylePreset'),
+  btnAddPrompt: document.getElementById('btnAddPrompt'),
+  btnImportPrompts: document.getElementById('btnImportPrompts'),
+  btnClearPrompts: document.getElementById('btnClearPrompts'),
+  ttiPromptCount: document.getElementById('ttiPromptCount'),
+  ttiPromptList: document.getElementById('ttiPromptList'),
+  ttiOutputFolder: document.getElementById('ttiOutputFolder'),
+  btnTTISelectFolder: document.getElementById('btnTTISelectFolder'),
+  ttiConvertToVideo: document.getElementById('ttiConvertToVideo'),
+  ttiVideoPromptGroup: document.getElementById('ttiVideoPromptGroup'),
+  ttiVideoPreset: document.getElementById('ttiVideoPreset'),
+  ttiCustomVideoPromptGroup: document.getElementById('ttiCustomVideoPromptGroup'),
+  ttiCustomVideoPrompt: document.getElementById('ttiCustomVideoPrompt'),
+  ttiProgressSection: document.getElementById('ttiProgressSection'),
+  ttiProgressTotal: document.getElementById('ttiProgressTotal'),
+  ttiProgressCompleted: document.getElementById('ttiProgressCompleted'),
+  ttiProgressFailed: document.getElementById('ttiProgressFailed'),
+  ttiProgressBar: document.getElementById('ttiProgressBar'),
+  ttiProgressStatus: document.getElementById('ttiProgressStatus'),
+  btnStartTTI: document.getElementById('btnStartTTI'),
+  btnStopTTI: document.getElementById('btnStopTTI')
 };
 
 // ============================================
@@ -94,6 +125,9 @@ async function init() {
   presets = await window.api.getPresets();
   populatePresets();
 
+  // Load TTI presets
+  ttiPresets = await window.api.getTTIPresets();
+
   // Check for resume data
   const resumeData = await window.api.getResumeData();
   if (resumeData && resumeData.files.length > 0) {
@@ -108,8 +142,9 @@ async function init() {
   // Set up event listeners
   setupEventListeners();
 
-  // Set up progress listener
+  // Set up progress listeners
   window.api.onProgress(handleProgress);
+  window.api.onTTIProgress(handleTTIProgress);
 }
 
 function applyConfig(cfg) {
@@ -121,6 +156,13 @@ function applyConfig(cfg) {
   if (cfg.delayBetween) elements.settingDelay.value = cfg.delayBetween;
   if (cfg.retryAttempts) elements.settingRetries.value = cfg.retryAttempts;
   if (cfg.headless !== undefined) elements.settingHeadless.checked = cfg.headless;
+
+  // TTI config - use same output folder by default
+  if (cfg.ttiOutputFolder) {
+    elements.ttiOutputFolder.value = cfg.ttiOutputFolder;
+  } else if (cfg.outputFolder) {
+    elements.ttiOutputFolder.value = cfg.outputFolder;
+  }
 }
 
 function populatePresets() {
@@ -213,6 +255,80 @@ function setupEventListeners() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeModal();
   });
+
+  // TTI Event Listeners
+  setupTTIEventListeners();
+}
+
+function setupTTIEventListeners() {
+  // Add prompt button
+  elements.btnAddPrompt.addEventListener('click', () => {
+    const text = elements.ttiPromptInput.value.trim();
+    if (text) {
+      addTTIPrompt(text);
+      elements.ttiPromptInput.value = '';
+    } else {
+      showToast('Please enter a prompt', 'warning');
+    }
+  });
+
+  // Enter key to add prompt
+  elements.ttiPromptInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      elements.btnAddPrompt.click();
+    }
+  });
+
+  // Import prompts from file
+  elements.btnImportPrompts.addEventListener('click', async () => {
+    const prompts = await window.api.importPromptsFile();
+    if (prompts.length > 0) {
+      prompts.forEach(text => addTTIPrompt(text));
+      showToast(`Imported ${prompts.length} prompts`, 'success');
+    }
+  });
+
+  // Clear all prompts
+  elements.btnClearPrompts.addEventListener('click', () => {
+    if (ttiPrompts.length > 0 && confirm('Clear all prompts from queue?')) {
+      ttiPrompts = [];
+      renderTTIPromptList();
+      showToast('Queue cleared', 'info');
+    }
+  });
+
+  // Aspect ratio buttons
+  document.querySelectorAll('.ratio-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedRatio = btn.dataset.ratio;
+    });
+  });
+
+  // Output folder selection
+  elements.btnTTISelectFolder.addEventListener('click', async () => {
+    const folder = await window.api.selectFolder('output');
+    if (folder) {
+      elements.ttiOutputFolder.value = folder;
+    }
+  });
+
+  // Convert to video checkbox
+  elements.ttiConvertToVideo.addEventListener('change', () => {
+    elements.ttiVideoPromptGroup.style.display = elements.ttiConvertToVideo.checked ? 'block' : 'none';
+  });
+
+  // Video preset selection
+  elements.ttiVideoPreset.addEventListener('change', () => {
+    elements.ttiCustomVideoPromptGroup.style.display =
+      elements.ttiVideoPreset.value === 'custom' ? 'block' : 'none';
+  });
+
+  // Start/Stop TTI generation
+  elements.btnStartTTI.addEventListener('click', startTTIGeneration);
+  elements.btnStopTTI.addEventListener('click', stopTTIGeneration);
 }
 
 // ============================================
@@ -549,38 +665,52 @@ async function loadHistory() {
     return;
   }
 
-  elements.historyList.innerHTML = entries.map(entry => `
-    <div class="history-item">
-      <div class="history-status ${entry.status}"></div>
-      <div class="history-info">
-        <div class="history-file">${entry.inputPath.split('\\').pop()}</div>
-        <div class="history-meta">
-          <span>${new Date(entry.createdAt).toLocaleString()}</span>
-          <span>${entry.status}</span>
-          ${entry.attempts > 1 ? `<span>${entry.attempts} attempts</span>` : ''}
+  elements.historyList.innerHTML = entries.map(entry => {
+    const isTTI = entry.inputPath.startsWith('[TTI]');
+    const displayName = isTTI ? entry.inputPath.replace('[TTI] ', '') : entry.inputPath.split('\\').pop();
+    const isImage = entry.outputPath && entry.outputPath.match(/\.(png|jpg|jpeg|gif|webp)$/i);
+    const isVideo = entry.outputPath && entry.outputPath.match(/\.(mp4|webm|mov)$/i);
+
+    return `
+      <div class="history-item ${isTTI ? 'history-item-tti' : ''}">
+        <div class="history-status ${entry.status}"></div>
+        <div class="history-info">
+          <div class="history-file">${isTTI ? '🖼️ ' : ''}${displayName}</div>
+          <div class="history-meta">
+            <span>${new Date(entry.createdAt).toLocaleString()}</span>
+            <span>${entry.status}</span>
+            ${isTTI && entry.aspectRatio ? `<span>${entry.aspectRatio}</span>` : ''}
+            ${entry.attempts > 1 ? `<span>${entry.attempts} attempts</span>` : ''}
+          </div>
+        </div>
+        <div class="history-actions">
+          ${entry.status === 'success' && entry.outputPath ? `
+            ${isVideo ? `
+              <button class="btn btn-ghost btn-sm" onclick="previewVideo('${entry.outputPath.replace(/\\/g, '\\\\')}')">
+                Preview
+              </button>
+            ` : `
+              <button class="btn btn-ghost btn-sm" onclick="window.api.openFile('${entry.outputPath.replace(/\\/g, '\\\\')}')">
+                View
+              </button>
+            `}
+            <button class="btn btn-ghost btn-sm" onclick="window.api.openFolder('${entry.outputPath.replace(/\\/g, '\\\\').replace(/[^\\]+$/, '')}')">
+              Open Folder
+            </button>
+          ` : ''}
+          ${entry.status === 'failed' && !isTTI ? `
+            <button class="btn btn-secondary btn-sm" onclick="retryConversion('${entry.inputPath.replace(/\\/g, '\\\\')}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+              Retry
+            </button>
+          ` : ''}
         </div>
       </div>
-      <div class="history-actions">
-        ${entry.status === 'success' && entry.outputPath ? `
-          <button class="btn btn-ghost btn-sm" onclick="previewVideo('${entry.outputPath.replace(/\\/g, '\\\\')}')">
-            Preview
-          </button>
-          <button class="btn btn-ghost btn-sm" onclick="window.api.openFolder('${entry.outputPath.replace(/\\/g, '\\\\').replace(/[^\\]+$/, '')}')">
-            Open Folder
-          </button>
-        ` : ''}
-        ${entry.status === 'failed' ? `
-          <button class="btn btn-secondary btn-sm" onclick="retryConversion('${entry.inputPath.replace(/\\/g, '\\\\')}')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-            Retry
-          </button>
-        ` : ''}
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 // Retry failed conversion
@@ -757,7 +887,8 @@ async function saveSettings() {
     prompt: elements.customPrompt.value,
     delayBetween: parseInt(elements.settingDelay.value),
     retryAttempts: parseInt(elements.settingRetries.value),
-    headless: elements.settingHeadless.checked
+    headless: elements.settingHeadless.checked,
+    ttiOutputFolder: elements.ttiOutputFolder.value
   };
 
   await window.api.saveConfig(cfg);
@@ -853,6 +984,275 @@ function debounce(fn, delay) {
     clearTimeout(timeout);
     timeout = setTimeout(() => fn(...args), delay);
   };
+}
+
+// ============================================
+// Text-to-Image Functions
+// ============================================
+
+function addTTIPrompt(text) {
+  const prompt = {
+    id: ++ttiPromptIdCounter,
+    text: text.trim(),
+    status: 'pending',
+    progress: 0
+  };
+  ttiPrompts.push(prompt);
+  renderTTIPromptList();
+}
+
+function removeTTIPrompt(id) {
+  ttiPrompts = ttiPrompts.filter(p => p.id !== id);
+  renderTTIPromptList();
+}
+
+function renderTTIPromptList() {
+  elements.ttiPromptCount.textContent = ttiPrompts.length;
+
+  if (ttiPrompts.length === 0) {
+    elements.ttiPromptList.innerHTML = `
+      <div class="prompt-list-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <line x1="9" y1="9" x2="15" y2="15"/>
+          <line x1="15" y1="9" x2="9" y2="15"/>
+        </svg>
+        <p>No prompts in queue</p>
+        <p class="text-muted">Add prompts above or import from a file</p>
+      </div>
+    `;
+    return;
+  }
+
+  const html = ttiPrompts.map((prompt, index) => {
+    const statusIcon = getTTIStatusIcon(prompt.status);
+    const showProgress = prompt.status === 'generating';
+    const showPreview = prompt.status === 'completed' && prompt.outputPath;
+
+    return `
+      <div class="prompt-card ${prompt.status}" data-id="${prompt.id}">
+        <div class="prompt-card-number">${index + 1}</div>
+        ${showPreview ? `
+          <div class="prompt-card-preview">
+            <img src="file://${prompt.outputPath}" alt="Generated image">
+          </div>
+        ` : ''}
+        <div class="prompt-card-content">
+          <div class="prompt-card-text">${escapeHtml(prompt.text)}</div>
+          <div class="prompt-card-meta">
+            <span class="prompt-card-status">${statusIcon} ${prompt.status}</span>
+            ${prompt.error ? `<span class="text-danger">${prompt.error}</span>` : ''}
+          </div>
+          ${showProgress ? `
+            <div class="prompt-progress">
+              <div class="prompt-progress-bar" style="width: ${prompt.progress}%"></div>
+            </div>
+          ` : ''}
+        </div>
+        <div class="prompt-card-actions">
+          ${prompt.status === 'completed' && prompt.outputPath ? `
+            <button class="btn-preview" title="Open image" onclick="window.api.openFile('${prompt.outputPath.replace(/\\/g, '\\\\')}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          ` : ''}
+          ${prompt.status === 'pending' ? `
+            <button class="btn-remove" title="Remove" onclick="removeTTIPrompt(${prompt.id})">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  elements.ttiPromptList.innerHTML = html;
+}
+
+function getTTIStatusIcon(status) {
+  switch (status) {
+    case 'pending': return '○';
+    case 'generating': return '◉';
+    case 'completed': return '✓';
+    case 'failed': return '✕';
+    default: return '○';
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function startTTIGeneration() {
+  const pendingPrompts = ttiPrompts.filter(p => p.status === 'pending');
+
+  if (pendingPrompts.length === 0) {
+    showToast('No prompts in queue', 'error');
+    return;
+  }
+
+  if (!elements.ttiOutputFolder.value) {
+    showToast('Please select an output folder', 'error');
+    return;
+  }
+
+  if (!elements.cookieDatr.value || !elements.cookieAbraSess.value) {
+    showToast('Please enter Meta AI cookies in Settings', 'error');
+    switchTab('settings');
+    return;
+  }
+
+  // Get style prefix
+  const selectedPreset = ttiPresets.find(p => p.id === elements.ttiStylePreset.value);
+  const stylePrefix = selectedPreset?.prefix || '';
+
+  // Get video prompt if enabled
+  let videoPrompt = '';
+  if (elements.ttiConvertToVideo.checked) {
+    if (elements.ttiVideoPreset.value === 'custom') {
+      videoPrompt = elements.ttiCustomVideoPrompt.value;
+    } else {
+      const videoPreset = presets.find(p => p.id === elements.ttiVideoPreset.value);
+      videoPrompt = videoPreset?.prompt || 'Animate with smooth cinematic motion';
+    }
+  }
+
+  const result = await window.api.startTTIGeneration({
+    cookies: {
+      datr: elements.cookieDatr.value,
+      abra_sess: elements.cookieAbraSess.value,
+      wd: '1920x1080',
+      dpr: '1'
+    },
+    prompts: pendingPrompts,
+    aspectRatio: selectedRatio,
+    outputFolder: elements.ttiOutputFolder.value,
+    stylePrefix,
+    convertToVideo: elements.ttiConvertToVideo.checked,
+    videoPrompt,
+    delayBetween: parseInt(elements.settingDelay.value) || 30,
+    retryAttempts: parseInt(elements.settingRetries.value) || 3,
+    headless: elements.settingHeadless.checked
+  });
+
+  if (result.success) {
+    isTTIGenerating = true;
+    elements.btnStartTTI.style.display = 'none';
+    elements.btnStopTTI.style.display = 'block';
+    elements.ttiProgressSection.style.display = 'block';
+    elements.ttiProgressTotal.textContent = pendingPrompts.length;
+    elements.ttiProgressCompleted.textContent = '0';
+    elements.ttiProgressFailed.textContent = '0';
+    elements.ttiProgressBar.style.width = '0%';
+    showToast('Generation started', 'info');
+  } else {
+    showToast(result.error || 'Failed to start generation', 'error');
+  }
+}
+
+async function stopTTIGeneration() {
+  await window.api.stopTTIGeneration();
+  isTTIGenerating = false;
+  elements.btnStartTTI.style.display = 'block';
+  elements.btnStopTTI.style.display = 'none';
+  showToast('Generation stopped', 'warning');
+}
+
+function handleTTIProgress(data) {
+  const prompt = ttiPrompts.find(p => p.id === data.promptId);
+
+  switch (data.type) {
+    case 'prompt-start':
+      if (prompt) {
+        prompt.status = 'generating';
+        prompt.progress = 0;
+        elements.ttiProgressStatus.textContent = `Generating: ${prompt.text.substring(0, 50)}...`;
+        renderTTIPromptList();
+      }
+      break;
+
+    case 'prompt-progress':
+      if (prompt) {
+        prompt.progress = data.percent;
+        elements.ttiProgressStatus.textContent = `${data.stage} - ${prompt.text.substring(0, 40)}...`;
+
+        // Update progress bar in the prompt card
+        const progressBar = document.querySelector(`.prompt-card[data-id="${data.promptId}"] .prompt-progress-bar`);
+        if (progressBar) {
+          progressBar.style.width = `${data.percent}%`;
+        }
+      }
+      break;
+
+    case 'prompt-complete':
+      if (prompt) {
+        prompt.status = data.success ? 'completed' : 'failed';
+        prompt.error = data.error;
+        prompt.outputPath = data.outputPath;
+        prompt.imageUrl = data.imageUrl;
+        prompt.progress = 100;
+
+        // Update progress stats
+        const completed = ttiPrompts.filter(p => p.status === 'completed').length;
+        const failed = ttiPrompts.filter(p => p.status === 'failed').length;
+        elements.ttiProgressCompleted.textContent = completed;
+        elements.ttiProgressFailed.textContent = failed;
+
+        // Update progress bar
+        const total = ttiPrompts.filter(p => p.status !== 'pending').length;
+        const percent = (total / ttiPrompts.length) * 100;
+        elements.ttiProgressBar.style.width = `${percent}%`;
+
+        renderTTIPromptList();
+      }
+      break;
+
+    case 'prompt-video-start':
+      if (prompt) {
+        elements.ttiProgressStatus.textContent = `Converting to video: ${prompt.text.substring(0, 40)}...`;
+      }
+      break;
+
+    case 'prompt-video-progress':
+      if (prompt) {
+        elements.ttiProgressStatus.textContent = `${data.stage} (video) - ${prompt.text.substring(0, 30)}...`;
+      }
+      break;
+
+    case 'prompt-video-complete':
+      if (prompt && data.success) {
+        prompt.videoPath = data.videoPath;
+        renderTTIPromptList();
+      }
+      break;
+
+    case 'complete':
+      isTTIGenerating = false;
+      elements.btnStartTTI.style.display = 'block';
+      elements.btnStopTTI.style.display = 'none';
+      elements.ttiProgressStatus.textContent = 'Complete!';
+
+      const successCount = ttiPrompts.filter(p => p.status === 'completed').length;
+      const errorCount = ttiPrompts.filter(p => p.status === 'failed').length;
+
+      if (errorCount > 0) {
+        showToast(`Completed with ${errorCount} error(s)`, 'warning');
+      } else {
+        showToast(`Successfully generated ${successCount} images!`, 'success');
+      }
+      break;
+
+    case 'error':
+      showToast(data.error, 'error');
+      break;
+  }
 }
 
 // ============================================

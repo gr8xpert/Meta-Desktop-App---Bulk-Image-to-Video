@@ -381,6 +381,200 @@ ipcMain.handle('close-window', () => {
   mainWindow?.close();
 });
 
+// ============ Text-to-Image IPC Handlers ============
+
+let ttiConverter = null;
+
+// Get TTI style presets
+ipcMain.handle('get-tti-presets', async () => {
+  return [
+    { id: 'realistic', name: 'Realistic Photo', prefix: 'Photorealistic image of ' },
+    { id: 'artistic', name: 'Artistic', prefix: 'Artistic illustration of ' },
+    { id: 'anime', name: 'Anime Style', prefix: 'Anime style image of ' },
+    { id: '3d', name: '3D Render', prefix: '3D rendered image of ' },
+    { id: 'fantasy', name: 'Fantasy Art', prefix: 'Fantasy art of ' },
+    { id: 'cinematic', name: 'Cinematic', prefix: 'Cinematic shot of ' },
+    { id: 'minimalist', name: 'Minimalist', prefix: 'Minimalist design of ' },
+    { id: 'custom', name: 'None (Use my exact prompt)', prefix: '' }
+  ];
+});
+
+// Import prompts from .txt file
+ipcMain.handle('import-prompts-file', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Text Files', extensions: ['txt'] }
+    ],
+    title: 'Import Prompts from Text File'
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return [];
+  }
+
+  try {
+    const content = fs.readFileSync(result.filePaths[0], 'utf8');
+    // Split by newlines, filter empty lines, trim whitespace
+    const prompts = content
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line.length > 0 && !line.startsWith('#')); // Skip empty lines and comments
+
+    return prompts;
+  } catch (e) {
+    console.error('Failed to read prompts file:', e);
+    return [];
+  }
+});
+
+// Start TTI generation
+ipcMain.handle('start-tti-generation', async (event, options) => {
+  const { cookies, prompts, aspectRatio, outputFolder, stylePrefix, convertToVideo, videoPrompt, delayBetween, retryAttempts, headless } = options;
+
+  if (ttiConverter) {
+    return { success: false, error: 'TTI generation already in progress' };
+  }
+
+  ttiConverter = new MetaConverter(cookies, {
+    headless,
+    retryAttempts,
+    delayBetween
+  });
+
+  // Start generation in background
+  (async () => {
+    try {
+      await ttiConverter.start();
+
+      for (let i = 0; i < prompts.length; i++) {
+        if (!ttiConverter.isRunning()) break;
+
+        const promptData = prompts[i];
+        const fullPrompt = stylePrefix ? `${stylePrefix}${promptData.text}` : promptData.text;
+
+        // Generate output filename
+        const sanitizedPrompt = promptData.text
+          .substring(0, 50)
+          .replace(/[^a-zA-Z0-9]/g, '_')
+          .replace(/_+/g, '_');
+        const timestamp = Date.now();
+        const outputName = `${String(i + 1).padStart(3, '0')}_${sanitizedPrompt}_${timestamp}.png`;
+        const outputPath = path.join(outputFolder, outputName);
+
+        mainWindow.webContents.send('tti-progress', {
+          type: 'prompt-start',
+          index: i,
+          promptId: promptData.id,
+          prompt: promptData.text
+        });
+
+        const result = await ttiConverter.textToImage(fullPrompt, outputPath, {
+          aspectRatio,
+          progressCallback: (stage, percent) => {
+            mainWindow.webContents.send('tti-progress', {
+              type: 'prompt-progress',
+              index: i,
+              promptId: promptData.id,
+              stage,
+              percent
+            });
+          }
+        });
+
+        // Save to history
+        db.addEntry({
+          inputPath: `[TTI] ${promptData.text.substring(0, 100)}`,
+          outputPath,
+          status: result.success ? 'success' : (result.downloadFailed ? 'download_failed' : 'failed'),
+          error: result.error,
+          prompt: fullPrompt,
+          attempts: result.attempts,
+          type: 'tti',
+          aspectRatio
+        });
+
+        mainWindow.webContents.send('tti-progress', {
+          type: 'prompt-complete',
+          index: i,
+          promptId: promptData.id,
+          success: result.success,
+          error: result.error,
+          outputPath: result.success ? outputPath : null,
+          imageUrl: result.imageUrl
+        });
+
+        // If convertToVideo is enabled and image was generated successfully
+        if (result.success && convertToVideo && converter === null) {
+          mainWindow.webContents.send('tti-progress', {
+            type: 'prompt-video-start',
+            index: i,
+            promptId: promptData.id
+          });
+
+          // Use the same converter to convert image to video
+          const videoOutputPath = outputPath.replace(/\.png$/, '.mp4');
+          const videoResult = await ttiConverter.convert(outputPath, videoOutputPath, videoPrompt || 'Animate with smooth cinematic motion', (stage, percent) => {
+            mainWindow.webContents.send('tti-progress', {
+              type: 'prompt-video-progress',
+              index: i,
+              promptId: promptData.id,
+              stage,
+              percent
+            });
+          });
+
+          mainWindow.webContents.send('tti-progress', {
+            type: 'prompt-video-complete',
+            index: i,
+            promptId: promptData.id,
+            success: videoResult.success,
+            videoPath: videoResult.success ? videoOutputPath : null
+          });
+        }
+
+        // Delay between prompts
+        if (i < prompts.length - 1 && ttiConverter.isRunning()) {
+          await new Promise(resolve => setTimeout(resolve, delayBetween * 1000));
+        }
+      }
+
+    } catch (e) {
+      console.error('TTI generation error:', e);
+      mainWindow.webContents.send('tti-progress', {
+        type: 'error',
+        error: e.message
+      });
+    } finally {
+      await ttiConverter.stop();
+      ttiConverter = null;
+
+      mainWindow.webContents.send('tti-progress', {
+        type: 'complete'
+      });
+
+      // Show notification
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'Meta Video Converter',
+          body: 'Text-to-Image generation completed!'
+        }).show();
+      }
+    }
+  })();
+
+  return { success: true };
+});
+
+// Stop TTI generation
+ipcMain.handle('stop-tti-generation', async () => {
+  if (ttiConverter) {
+    ttiConverter.stop();
+    return true;
+  }
+  return false;
+});
+
 // Retry failed download - uses direct HTTPS download (no browser needed)
 ipcMain.handle('retry-download', async (event, { videoUrl, outputPath }) => {
   console.log('[RETRY-DOWNLOAD] Starting...');
