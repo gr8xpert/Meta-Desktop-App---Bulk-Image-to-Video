@@ -2367,7 +2367,7 @@ async function startBulkUpscale() {
   elements.upscaleProgressBar.style.width = '0%';
   elements.upscaleProgressStatus.textContent = 'Starting...';
 
-  const result = await window.api.startBulkUpscale({
+  const startResult = await window.api.startBulkUpscale({
     files: pendingFiles,
     method: upscaleMethod,
     scale: upscaleScale,
@@ -2375,8 +2375,8 @@ async function startBulkUpscale() {
     outputFormat: elements.upscaleOutputFormat.value
   });
 
-  if (!result.success) {
-    showToast(result.error || 'Failed to start upscaling', 'error');
+  if (!startResult.success) {
+    showToast(startResult.error || 'Failed to start upscaling', 'error');
     isUpscaling = false;
     elements.btnStartUpscale.style.display = 'block';
     elements.btnStopUpscale.style.display = 'none';
