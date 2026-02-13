@@ -430,27 +430,19 @@
           <div class="panel panel-upscale-settings">
             <h3>Upscale Settings</h3>
 
-            <!-- Method Selection -->
+            <!-- Method Info -->
             <div class="input-group">
               <label>Upscale Method</label>
-              <div class="method-buttons">
-                <button class="method-btn active" data-method="basic" id="btnMethodBasic">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-                    <polyline points="17 6 23 6 23 12"/>
-                  </svg>
-                  <span>Basic</span>
-                  <small>Fast, good quality</small>
-                </button>
-                <button class="method-btn" data-method="ai" id="btnMethodAI">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-                    <path d="M12 2a10 10 0 1 0 10 10H12V2z"/>
-                    <path d="M12 2a10 10 0 0 1 10 10"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                  <span>AI (Real-ESRGAN)</span>
-                  <small>Best quality, slower</small>
-                </button>
+              <div class="ai-method-info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                  <path d="M12 2a10 10 0 1 0 10 10H12V2z"/>
+                  <path d="M12 2a10 10 0 0 1 10 10"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <div>
+                  <span>AI Upscale (Real-ESRGAN)</span>
+                  <small>High-quality AI enhancement</small>
+                </div>
               </div>
             </div>
 
@@ -728,7 +720,6 @@
             <div class="editor-tabs">
               <button class="editor-tab active" data-tab="adjust">Adjust</button>
               <button class="editor-tab" data-tab="transform">Transform</button>
-              <button class="editor-tab" data-tab="upscale">Upscale</button>
               <button class="editor-tab" data-tab="export">Export</button>
             </div>
 
@@ -860,39 +851,6 @@
                   </div>
                 </div>
                 <button class="btn btn-secondary btn-sm btn-full" id="btnApplyResize">Apply Resize</button>
-              </div>
-            </div>
-
-            <!-- Upscale Tab -->
-            <div class="editor-tab-content" id="editorTabUpscale">
-              <div class="editor-section">
-                <h3>Basic Upscale</h3>
-                <p class="section-desc">Fast upscaling using Lanczos algorithm</p>
-                <div class="upscale-buttons">
-                  <button class="upscale-btn" data-scale="2" data-method="basic">2x</button>
-                  <button class="upscale-btn" data-scale="3" data-method="basic">3x</button>
-                  <button class="upscale-btn" data-scale="4" data-method="basic">4x</button>
-                </div>
-              </div>
-
-              <div class="editor-section">
-                <h3>AI Upscale (Real-ESRGAN)</h3>
-                <p class="section-desc">High-quality AI enhancement</p>
-                <div id="realesrganStatus" class="realesrgan-status">
-                  <span class="status-checking">Checking...</span>
-                </div>
-                <div class="upscale-buttons" id="aiUpscaleButtons" style="display:none;">
-                  <button class="upscale-btn ai" data-scale="2" data-method="ai">2x AI</button>
-                  <button class="upscale-btn ai" data-scale="4" data-method="ai">4x AI</button>
-                </div>
-                <button class="btn btn-secondary btn-full" id="btnInstallRealesrgan" style="display:none;">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  Download Real-ESRGAN (~50MB)
-                </button>
-                <div class="download-progress" id="realesrganProgress" style="display:none;">
-                  <div class="progress-bar-container"><div class="progress-bar" id="realesrganProgressBar"></div></div>
-                  <span id="realesrganProgressText">Downloading...</span>
-                </div>
               </div>
             </div>
 

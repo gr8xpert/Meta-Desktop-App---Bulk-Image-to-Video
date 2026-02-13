@@ -49,10 +49,6 @@ Full-featured image editor accessible from the Gallery:
 - **Flip**: Flip horizontally or vertically
 - **Resize**: Custom dimensions with aspect ratio lock
 
-#### Upscale (Single Image)
-- **Basic Upscale**: Fast upscaling using Lanczos algorithm (2x, 3x, 4x)
-- **AI Upscale**: High-quality upscaling using Real-ESRGAN (2x, 4x)
-
 #### Export Options
 - **Format Selection**: Save as JPEG, PNG, or WebP
 - **Quality Control**: Adjustable quality slider (10-100%)
@@ -69,12 +65,10 @@ Full-featured image editor accessible from the Gallery:
 - **Before/After**: Compare slider to see original vs edited
 
 ### Bulk Upscale (NEW in v3.22.0)
-Dedicated tab for batch upscaling multiple images:
+Dedicated tab for batch AI upscaling multiple images:
 
 - **Drag & Drop**: Add multiple images at once
-- **Two Methods**:
-  - **Basic**: Fast, good quality using Lanczos3 algorithm
-  - **AI (Real-ESRGAN)**: Best quality, slower processing
+- **AI Upscaling**: High-quality enhancement using Real-ESRGAN
 - **Scale Factors**: 2x, 3x, or 4x enlargement
 - **Output Format**: Same as original, PNG, JPG, or WebP
 - **Progress Tracking**: Real-time progress with per-file status

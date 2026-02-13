@@ -197,8 +197,6 @@ const elements = {
   upscaleFileList: document.getElementById('upscaleFileList'),
   upscaleFileActions: document.getElementById('upscaleFileActions'),
   btnUpscaleClearFiles: document.getElementById('btnUpscaleClearFiles'),
-  btnMethodBasic: document.getElementById('btnMethodBasic'),
-  btnMethodAI: document.getElementById('btnMethodAI'),
   upscaleOutputFolder: document.getElementById('upscaleOutputFolder'),
   btnUpscaleSelectOutput: document.getElementById('btnUpscaleSelectOutput'),
   upscaleOutputFormat: document.getElementById('upscaleOutputFormat'),
@@ -242,7 +240,7 @@ let realesrganInstalled = false;
 
 // Bulk Upscale State
 let upscaleFiles = [];           // Array of { id, name, path, status, progress, thumbnail }
-let upscaleMethod = 'basic';     // 'basic' or 'ai'
+let upscaleMethod = 'ai';        // AI upscaling only (Real-ESRGAN)
 let upscaleScale = 2;            // 2, 3, or 4
 let isUpscaling = false;
 let upscaleIdCounter = 0;
@@ -2342,15 +2340,6 @@ function setupUpscaleEventListeners() {
     }
   });
 
-  // Method buttons
-  document.querySelectorAll('.method-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      upscaleMethod = btn.dataset.method;
-    });
-  });
-
   // Scale buttons
   document.querySelectorAll('.scale-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2478,12 +2467,10 @@ async function startBulkUpscale() {
   }
 
   // Check if AI upscale is available
-  if (upscaleMethod === 'ai') {
-    const result = await window.api.checkRealesrgan();
-    if (!result.installed) {
-      showToast('Real-ESRGAN is not available. Please use Basic upscaling.', 'error');
-      return;
-    }
+  const result = await window.api.checkRealesrgan();
+  if (!result.installed) {
+    showToast('Real-ESRGAN is not available for AI upscaling.', 'error');
+    return;
   }
 
   isUpscaling = true;
