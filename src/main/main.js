@@ -1785,3 +1785,64 @@ ipcMain.handle('retry-download', async (event, { videoUrl, outputPath }) => {
     return { success: false, error: `Download failed: ${e.message}` };
   }
 });
+
+// ============================================
+// Video Editor IPC Handlers
+// ============================================
+
+// Select video files
+ipcMain.handle('select-videos', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: 'Videos', extensions: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv'] }
+    ]
+  });
+
+  return result.canceled ? [] : result.filePaths;
+});
+
+// Select audio files
+ipcMain.handle('select-audio', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Audio', extensions: ['mp3', 'wav', 'aac', 'm4a', 'ogg', 'flac'] }
+    ]
+  });
+
+  return result.canceled ? [] : result.filePaths;
+});
+
+// Get video info (duration, thumbnail)
+ipcMain.handle('get-video-info', async (event, videoPath) => {
+  try {
+    // For now, return basic info
+    // TODO: Use FFprobe to get actual duration and generate thumbnail
+    return {
+      duration: 0,
+      thumbnail: ''
+    };
+  } catch (e) {
+    console.error('Error getting video info:', e);
+    return null;
+  }
+});
+
+// Generate captions using Whisper
+ipcMain.handle('generate-captions', async (event, videoPaths) => {
+  // TODO: Implement Whisper integration
+  return { success: false, error: 'Whisper not yet implemented' };
+});
+
+// Export video
+ipcMain.handle('export-video', async (event, options) => {
+  // TODO: Implement FFmpeg video export
+  return { success: false, error: 'FFmpeg export not yet implemented' };
+});
+
+// Cancel video export
+ipcMain.handle('cancel-video-export', async () => {
+  // TODO: Implement export cancellation
+  return { success: true };
+});

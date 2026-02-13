@@ -88,5 +88,14 @@ contextBridge.exposeInMainWorld('api', {
   // Bulk Upscale
   startBulkUpscale: (options) => ipcRenderer.invoke('start-bulk-upscale', options),
   stopBulkUpscale: () => ipcRenderer.invoke('stop-bulk-upscale'),
-  onBulkUpscaleProgress: (callback) => ipcRenderer.on('bulk-upscale-progress', (e, data) => callback(data))
+  onBulkUpscaleProgress: (callback) => ipcRenderer.on('bulk-upscale-progress', (e, data) => callback(data)),
+
+  // Video Editor
+  selectVideos: () => ipcRenderer.invoke('select-videos'),
+  selectAudio: () => ipcRenderer.invoke('select-audio'),
+  getVideoInfo: (path) => ipcRenderer.invoke('get-video-info', path),
+  generateCaptions: (videoPaths) => ipcRenderer.invoke('generate-captions', videoPaths),
+  exportVideo: (options) => ipcRenderer.invoke('export-video', options),
+  cancelVideoExport: () => ipcRenderer.invoke('cancel-video-export'),
+  onVideoExportProgress: (callback) => ipcRenderer.on('video-export-progress', (e, data) => callback(data))
 });
