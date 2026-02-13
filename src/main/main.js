@@ -384,8 +384,14 @@ ipcMain.handle('save-resume-data', async (event, data) => {
 // Open folder in explorer
 ipcMain.handle('open-folder', async (event, folderPath) => {
   try {
-    // Normalize path for Windows
-    const normalizedPath = folderPath.replace(/\//g, '\\');
+    // Normalize path for Windows - fix double backslashes and forward slashes
+    let normalizedPath = folderPath
+      .replace(/\\\\/g, '\\')  // Replace double backslashes with single
+      .replace(/\//g, '\\');    // Replace forward slashes with backslashes
+
+    console.log('[OPEN-FOLDER] Original:', folderPath);
+    console.log('[OPEN-FOLDER] Normalized:', normalizedPath);
+
     if (fs.existsSync(normalizedPath)) {
       shell.openPath(normalizedPath);
     } else {
