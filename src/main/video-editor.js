@@ -386,13 +386,17 @@ class VideoEditor {
       }
     }
 
-    // Output settings
+    // Output settings - Windows Media Player compatible
     args.push(
       '-c:v', 'libx264',
+      '-profile:v', 'high',
+      '-level', '4.1',
+      '-pix_fmt', 'yuv420p',
       '-preset', 'slow',
       '-crf', '18',
       '-c:a', 'aac',
       '-b:a', '256k',
+      '-movflags', '+faststart',
       outputPath
     );
 
@@ -406,10 +410,14 @@ class VideoEditor {
         '-y',
         '-i', inputPath,
         '-c:v', 'libx264',
+        '-profile:v', 'high',
+        '-level', '4.1',
+        '-pix_fmt', 'yuv420p',
         '-preset', 'slow',
         '-crf', '18',
         '-c:a', 'aac',
         '-b:a', '256k',
+        '-movflags', '+faststart',
         outputPath
       ];
 
@@ -488,9 +496,13 @@ class VideoEditor {
         '-i', videoPath,
         '-vf', `ass='${escapedCaptions}'`,
         '-c:v', 'libx264',
+        '-profile:v', 'high',
+        '-level', '4.1',
+        '-pix_fmt', 'yuv420p',
         '-preset', 'slow',
         '-crf', '18',
         '-c:a', 'copy',
+        '-movflags', '+faststart',
         outputPath
       ];
 
@@ -520,21 +532,21 @@ class VideoEditor {
         default: scale = '-1:-1'; // Original
       }
 
-      let crf = '23';
-      switch (quality) {
-        case 'low': crf = '28'; break;
-        case 'medium': crf = '23'; break;
-        case 'high': crf = '18'; break;
-      }
+      // Always use high quality (CRF 18)
+      const crf = '18';
 
       const args = [
         '-y',
         '-i', videoPath,
         '-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`,
         '-c:v', 'libx264',
+        '-profile:v', 'high',
+        '-level', '4.1',
+        '-pix_fmt', 'yuv420p',
         '-preset', 'slow',
         '-crf', crf,
         '-c:a', 'copy',
+        '-movflags', '+faststart',
         outputPath
       ];
 
