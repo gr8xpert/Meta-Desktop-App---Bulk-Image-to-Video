@@ -389,10 +389,10 @@ class VideoEditor {
     // Output settings
     args.push(
       '-c:v', 'libx264',
-      '-preset', 'medium',
-      '-crf', '23',
+      '-preset', 'slow',
+      '-crf', '18',
       '-c:a', 'aac',
-      '-b:a', '192k',
+      '-b:a', '256k',
       outputPath
     );
 
@@ -406,10 +406,10 @@ class VideoEditor {
         '-y',
         '-i', inputPath,
         '-c:v', 'libx264',
-        '-preset', 'medium',
-        '-crf', '23',
+        '-preset', 'slow',
+        '-crf', '18',
         '-c:a', 'aac',
-        '-b:a', '192k',
+        '-b:a', '256k',
         outputPath
       ];
 
@@ -457,7 +457,7 @@ class VideoEditor {
         '-map', '[aout]',
         '-c:v', 'copy',
         '-c:a', 'aac',
-        '-b:a', '192k',
+        '-b:a', '256k',
         '-shortest',
         outputPath
       ];
@@ -488,8 +488,8 @@ class VideoEditor {
         '-i', videoPath,
         '-vf', `ass='${escapedCaptions}'`,
         '-c:v', 'libx264',
-        '-preset', 'medium',
-        '-crf', '23',
+        '-preset', 'slow',
+        '-crf', '18',
         '-c:a', 'copy',
         outputPath
       ];
@@ -532,7 +532,7 @@ class VideoEditor {
         '-i', videoPath,
         '-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`,
         '-c:v', 'libx264',
-        '-preset', 'medium',
+        '-preset', 'slow',
         '-crf', crf,
         '-c:a', 'copy',
         outputPath

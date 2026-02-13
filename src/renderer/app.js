@@ -255,8 +255,8 @@ let musicFile = null;
 let musicVolume = 70;
 let originalVolume = 100;
 let musicFade = true;
-let exportQuality = 'medium';
-let exportResolution = '1080';
+let exportQuality = 'high';      // Always high quality
+let exportResolution = 'original'; // Keep original resolution
 let isExporting = false;
 
 // ============================================
@@ -2619,19 +2619,7 @@ function setupVideoEditorEventListeners() {
     musicFade = e.target.checked;
   });
 
-  // Quality buttons
-  document.querySelectorAll('.quality-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.quality-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      exportQuality = btn.dataset.quality;
-    });
-  });
-
-  // Export resolution
-  document.getElementById('exportResolution')?.addEventListener('change', (e) => {
-    exportResolution = e.target.value;
-  });
+  // Quality and resolution are now fixed to high/original
 
   // Output folder button
   document.getElementById('btnVideoOutputFolder')?.addEventListener('click', async () => {
