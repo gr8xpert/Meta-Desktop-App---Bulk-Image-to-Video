@@ -35,6 +35,7 @@
       <nav class="nav-tabs">
         <button class="nav-tab active" data-tab="convert">Convert</button>
         <button class="nav-tab" data-tab="tti">Text to Image</button>
+        <button class="nav-tab" data-tab="upscale">Upscale</button>
         <button class="nav-tab" data-tab="gallery">Gallery</button>
         <button class="nav-tab" data-tab="history">History</button>
         <button class="nav-tab" data-tab="settings">Settings</button>
@@ -380,6 +381,141 @@
         </div>
       </section>
 
+      <!-- Upscale Tab -->
+      <section class="tab-content" id="tab-upscale">
+        <div class="upscale-layout">
+          <!-- Left Panel: Input Files -->
+          <div class="panel panel-upscale-files">
+            <div class="panel-header">
+              <h2>Images to Upscale</h2>
+              <span class="file-count">(<span id="upscaleFileCount">0</span> files)</span>
+            </div>
+
+            <!-- Drop Zone -->
+            <div class="drop-zone" id="upscaleDropZone">
+              <div class="drop-zone-content">
+                <div class="drop-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                </div>
+                <p class="drop-text">Drop images here</p>
+                <p class="drop-subtext">or click to browse</p>
+                <div class="drop-buttons">
+                  <button class="btn btn-ghost" id="btnUpscaleSelectFiles">Select Files</button>
+                  <button class="btn btn-ghost" id="btnUpscaleSelectFolder">Select Folder</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- File List -->
+            <div class="upscale-file-list" id="upscaleFileList" style="display:none;">
+              <!-- Populated by JS -->
+            </div>
+
+            <div class="upscale-file-actions" id="upscaleFileActions" style="display:none;">
+              <button class="btn btn-ghost btn-sm" id="btnUpscaleClearFiles">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+                Clear All
+              </button>
+            </div>
+          </div>
+
+          <!-- Right Panel: Settings -->
+          <div class="panel panel-upscale-settings">
+            <h3>Upscale Settings</h3>
+
+            <!-- Method Selection -->
+            <div class="input-group">
+              <label>Upscale Method</label>
+              <div class="method-buttons">
+                <button class="method-btn active" data-method="basic" id="btnMethodBasic">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                    <polyline points="17 6 23 6 23 12"/>
+                  </svg>
+                  <span>Basic</span>
+                  <small>Fast, good quality</small>
+                </button>
+                <button class="method-btn" data-method="ai" id="btnMethodAI">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                    <path d="M12 2a10 10 0 1 0 10 10H12V2z"/>
+                    <path d="M12 2a10 10 0 0 1 10 10"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <span>AI (Real-ESRGAN)</span>
+                  <small>Best quality, slower</small>
+                </button>
+              </div>
+            </div>
+
+            <!-- Scale Selection -->
+            <div class="input-group">
+              <label>Scale Factor</label>
+              <div class="scale-buttons">
+                <button class="scale-btn active" data-scale="2">2x</button>
+                <button class="scale-btn" data-scale="3">3x</button>
+                <button class="scale-btn" data-scale="4">4x</button>
+              </div>
+            </div>
+
+            <!-- Output Folder -->
+            <div class="input-group">
+              <label>Output Folder</label>
+              <div class="folder-input">
+                <input type="text" id="upscaleOutputFolder" placeholder="Select output folder..." readonly>
+                <button class="btn btn-secondary" id="btnUpscaleSelectOutput">Browse</button>
+              </div>
+            </div>
+
+            <!-- Output Format -->
+            <div class="input-group">
+              <label>Output Format</label>
+              <select id="upscaleOutputFormat">
+                <option value="same">Same as original</option>
+                <option value="png">PNG (best quality)</option>
+                <option value="jpg">JPG (smaller size)</option>
+                <option value="webp">WebP (modern)</option>
+              </select>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="upscale-actions">
+              <button class="btn btn-primary btn-lg" id="btnStartUpscale">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                Start Upscaling
+              </button>
+              <button class="btn btn-danger btn-lg" id="btnStopUpscale" style="display:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                  <rect x="6" y="6" width="12" height="12"/>
+                </svg>
+                Stop
+              </button>
+            </div>
+
+            <!-- Progress -->
+            <div class="upscale-progress" id="upscaleProgressSection" style="display:none;">
+              <div class="progress-stats">
+                <span><span id="upscaleProgressCompleted">0</span> / <span id="upscaleProgressTotal">0</span> completed</span>
+                <span id="upscaleProgressStatus">Waiting...</span>
+              </div>
+              <div class="progress-bar-container">
+                <div class="progress-bar">
+                  <div class="progress-fill" id="upscaleProgressBar"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Gallery Tab -->
       <section class="tab-content" id="tab-gallery">
         <div class="gallery-container">
@@ -553,88 +689,267 @@
       <div class="modal-content modal-editor">
         <div class="editor-header">
           <h2>Image Editor</h2>
-          <button class="modal-close" id="btnCloseEditor">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          <div class="editor-header-actions">
+            <label class="checkbox-label compare-toggle">
+              <input type="checkbox" id="editorCompare">
+              <span class="checkbox-custom"></span>
+              Before/After
+            </label>
+            <button class="modal-close" id="btnCloseEditor">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div class="editor-body">
           <!-- Preview Area -->
           <div class="editor-preview">
             <img id="editorPreviewImage" alt="Preview">
+            <img id="editorOriginalImage" alt="Original" class="compare-original" style="display:none;">
+            <div class="compare-slider" id="compareSlider" style="display:none;">
+              <div class="compare-line"></div>
+              <div class="compare-handle">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l-6-7 6-7zm8 0v14l6-7-6-7z"/></svg>
+              </div>
+            </div>
             <div class="editor-loading" id="editorLoading">
               <div class="spinner"></div>
               <span>Processing...</span>
             </div>
+            <div class="editor-image-info" id="editorImageInfo"></div>
           </div>
 
           <!-- Controls Panel -->
           <div class="editor-controls">
-            <div class="editor-section">
-              <h3>Adjustments</h3>
+            <!-- Editor Tabs -->
+            <div class="editor-tabs">
+              <button class="editor-tab active" data-tab="adjust">Adjust</button>
+              <button class="editor-tab" data-tab="transform">Transform</button>
+              <button class="editor-tab" data-tab="upscale">Upscale</button>
+              <button class="editor-tab" data-tab="export">Export</button>
+            </div>
 
-              <div class="editor-slider-group">
-                <div class="editor-slider-header">
-                  <label>Brightness</label>
-                  <span class="editor-slider-value" id="brightnessValue">100%</span>
+            <!-- Adjust Tab -->
+            <div class="editor-tab-content active" id="editorTabAdjust">
+              <div class="editor-section">
+                <h3>Adjustments</h3>
+                <div class="editor-slider-group">
+                  <div class="editor-slider-header">
+                    <label>Brightness</label>
+                    <span class="editor-slider-value" id="brightnessValue">100%</span>
+                  </div>
+                  <input type="range" id="editorBrightness" min="0" max="200" value="100" class="editor-slider">
                 </div>
-                <input type="range" id="editorBrightness" min="0" max="200" value="100" class="editor-slider">
+                <div class="editor-slider-group">
+                  <div class="editor-slider-header">
+                    <label>Contrast</label>
+                    <span class="editor-slider-value" id="contrastValue">100%</span>
+                  </div>
+                  <input type="range" id="editorContrast" min="0" max="200" value="100" class="editor-slider">
+                </div>
+                <div class="editor-slider-group">
+                  <div class="editor-slider-header">
+                    <label>Saturation</label>
+                    <span class="editor-slider-value" id="saturationValue">100%</span>
+                  </div>
+                  <input type="range" id="editorSaturation" min="0" max="200" value="100" class="editor-slider">
+                </div>
+                <div class="editor-slider-group">
+                  <div class="editor-slider-header">
+                    <label>Sharpness</label>
+                    <span class="editor-slider-value" id="sharpnessValue">0</span>
+                  </div>
+                  <input type="range" id="editorSharpness" min="0" max="10" value="0" step="0.5" class="editor-slider">
+                </div>
+                <div class="editor-slider-group">
+                  <div class="editor-slider-header">
+                    <label>Blur</label>
+                    <span class="editor-slider-value" id="blurValue">0</span>
+                  </div>
+                  <input type="range" id="editorBlur" min="0" max="10" value="0" step="0.5" class="editor-slider">
+                </div>
               </div>
 
-              <div class="editor-slider-group">
-                <div class="editor-slider-header">
-                  <label>Contrast</label>
-                  <span class="editor-slider-value" id="contrastValue">100%</span>
+              <div class="editor-section">
+                <h3>Filters</h3>
+                <div class="editor-filters">
+                  <button class="editor-filter-btn" id="filterGrayscale" data-filter="grayscale">
+                    <span class="filter-preview grayscale"></span>
+                    <span>B&W</span>
+                  </button>
+                  <button class="editor-filter-btn" id="filterSepia" data-filter="sepia">
+                    <span class="filter-preview sepia"></span>
+                    <span>Sepia</span>
+                  </button>
+                  <button class="editor-filter-btn" id="filterNegative" data-filter="negative">
+                    <span class="filter-preview negative"></span>
+                    <span>Invert</span>
+                  </button>
                 </div>
-                <input type="range" id="editorContrast" min="0" max="200" value="100" class="editor-slider">
               </div>
 
-              <div class="editor-slider-group">
-                <div class="editor-slider-header">
-                  <label>Saturation</label>
-                  <span class="editor-slider-value" id="saturationValue">100%</span>
+              <div class="editor-section">
+                <h3>Presets</h3>
+                <div class="preset-row">
+                  <select id="presetSelect" class="preset-dropdown">
+                    <option value="">Select preset...</option>
+                  </select>
+                  <button class="btn btn-icon btn-sm" id="btnLoadPreset" title="Load">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
+                  </button>
+                  <button class="btn btn-icon btn-sm" id="btnSavePreset" title="Save">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+                  </button>
+                  <button class="btn btn-icon btn-sm btn-danger" id="btnDeletePreset" title="Delete">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  </button>
                 </div>
-                <input type="range" id="editorSaturation" min="0" max="200" value="100" class="editor-slider">
-              </div>
-
-              <div class="editor-slider-group">
-                <div class="editor-slider-header">
-                  <label>Sharpness</label>
-                  <span class="editor-slider-value" id="sharpnessValue">0</span>
-                </div>
-                <input type="range" id="editorSharpness" min="0" max="10" value="0" step="0.5" class="editor-slider">
-              </div>
-
-              <div class="editor-slider-group">
-                <div class="editor-slider-header">
-                  <label>Blur</label>
-                  <span class="editor-slider-value" id="blurValue">0</span>
-                </div>
-                <input type="range" id="editorBlur" min="0" max="10" value="0" step="0.5" class="editor-slider">
               </div>
             </div>
 
-            <div class="editor-section">
-              <h3>Filters</h3>
-              <div class="editor-filters">
-                <button class="editor-filter-btn" id="filterGrayscale" data-filter="grayscale">
-                  <span class="filter-preview grayscale"></span>
-                  <span>Grayscale</span>
-                </button>
-                <button class="editor-filter-btn" id="filterSepia" data-filter="sepia">
-                  <span class="filter-preview sepia"></span>
-                  <span>Sepia</span>
-                </button>
-                <button class="editor-filter-btn" id="filterNegative" data-filter="negative">
-                  <span class="filter-preview negative"></span>
-                  <span>Negative</span>
-                </button>
+            <!-- Transform Tab -->
+            <div class="editor-tab-content" id="editorTabTransform">
+              <div class="editor-section">
+                <h3>Rotate</h3>
+                <div class="transform-buttons">
+                  <button class="transform-btn" id="btnRotateLeft" title="Rotate Left">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                    <span>-90°</span>
+                  </button>
+                  <button class="transform-btn" id="btnRotate180" title="Rotate 180">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <span>180°</span>
+                  </button>
+                  <button class="transform-btn" id="btnRotateRight" title="Rotate Right">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    <span>+90°</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="editor-section">
+                <h3>Flip</h3>
+                <div class="transform-buttons">
+                  <button class="transform-btn" id="btnFlipH" title="Flip Horizontal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="3" x2="12" y2="21"/><polyline points="16 7 20 12 16 17"/><polyline points="8 7 4 12 8 17"/></svg>
+                    <span>Horizontal</span>
+                  </button>
+                  <button class="transform-btn" id="btnFlipV" title="Flip Vertical">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><polyline points="7 8 12 4 17 8"/><polyline points="7 16 12 20 17 16"/></svg>
+                    <span>Vertical</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="editor-section">
+                <h3>Resize</h3>
+                <div class="resize-inputs">
+                  <div class="input-group-sm">
+                    <label>Width</label>
+                    <input type="number" id="resizeWidth" placeholder="px">
+                  </div>
+                  <div class="resize-link" id="resizeLock" title="Lock aspect ratio">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  </div>
+                  <div class="input-group-sm">
+                    <label>Height</label>
+                    <input type="number" id="resizeHeight" placeholder="px">
+                  </div>
+                </div>
+                <button class="btn btn-secondary btn-sm btn-full" id="btnApplyResize">Apply Resize</button>
               </div>
             </div>
 
+            <!-- Upscale Tab -->
+            <div class="editor-tab-content" id="editorTabUpscale">
+              <div class="editor-section">
+                <h3>Basic Upscale</h3>
+                <p class="section-desc">Fast upscaling using Lanczos algorithm</p>
+                <div class="upscale-buttons">
+                  <button class="upscale-btn" data-scale="2" data-method="basic">2x</button>
+                  <button class="upscale-btn" data-scale="3" data-method="basic">3x</button>
+                  <button class="upscale-btn" data-scale="4" data-method="basic">4x</button>
+                </div>
+              </div>
+
+              <div class="editor-section">
+                <h3>AI Upscale (Real-ESRGAN)</h3>
+                <p class="section-desc">High-quality AI enhancement</p>
+                <div id="realesrganStatus" class="realesrgan-status">
+                  <span class="status-checking">Checking...</span>
+                </div>
+                <div class="upscale-buttons" id="aiUpscaleButtons" style="display:none;">
+                  <button class="upscale-btn ai" data-scale="2" data-method="ai">2x AI</button>
+                  <button class="upscale-btn ai" data-scale="4" data-method="ai">4x AI</button>
+                </div>
+                <button class="btn btn-secondary btn-full" id="btnInstallRealesrgan" style="display:none;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Download Real-ESRGAN (~50MB)
+                </button>
+                <div class="download-progress" id="realesrganProgress" style="display:none;">
+                  <div class="progress-bar-container"><div class="progress-bar" id="realesrganProgressBar"></div></div>
+                  <span id="realesrganProgressText">Downloading...</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Export Tab -->
+            <div class="editor-tab-content" id="editorTabExport">
+              <div class="editor-section">
+                <h3>Export Settings</h3>
+                <div class="input-group-sm">
+                  <label>Format</label>
+                  <select id="exportFormat">
+                    <option value="jpg">JPEG</option>
+                    <option value="png">PNG</option>
+                    <option value="webp">WebP</option>
+                  </select>
+                </div>
+                <div class="editor-slider-group">
+                  <div class="editor-slider-header">
+                    <label>Quality</label>
+                    <span class="editor-slider-value" id="exportQualityValue">90%</span>
+                  </div>
+                  <input type="range" id="exportQuality" min="10" max="100" value="90" class="editor-slider">
+                </div>
+              </div>
+
+              <div class="editor-section">
+                <h3>Watermark</h3>
+                <div class="input-group-sm">
+                  <label>Text</label>
+                  <input type="text" id="watermarkText" placeholder="Your watermark text">
+                </div>
+                <div class="watermark-row">
+                  <div class="input-group-sm">
+                    <label>Size</label>
+                    <input type="number" id="watermarkSize" value="24" min="10" max="100">
+                  </div>
+                  <div class="input-group-sm">
+                    <label>Opacity</label>
+                    <input type="number" id="watermarkOpacity" value="50" min="10" max="100">
+                  </div>
+                </div>
+                <button class="btn btn-secondary btn-sm btn-full" id="btnApplyWatermark">Preview Watermark</button>
+              </div>
+
+              <div class="editor-section">
+                <h3>Quick Thumbnails</h3>
+                <p class="section-desc">Generate multiple sizes at once</p>
+                <div class="thumbnail-options">
+                  <label class="checkbox-label"><input type="checkbox" id="thumbYoutube" checked><span class="checkbox-custom"></span>YouTube (1280x720)</label>
+                  <label class="checkbox-label"><input type="checkbox" id="thumbInstagram"><span class="checkbox-custom"></span>Instagram (1080x1080)</label>
+                  <label class="checkbox-label"><input type="checkbox" id="thumbTwitter"><span class="checkbox-custom"></span>Twitter (1200x675)</label>
+                  <label class="checkbox-label"><input type="checkbox" id="thumbFacebook"><span class="checkbox-custom"></span>Facebook (1200x630)</label>
+                </div>
+                <button class="btn btn-secondary btn-sm btn-full" id="btnGenerateThumbnails">Generate Thumbnails</button>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
             <div class="editor-actions">
               <button class="btn btn-ghost" id="btnResetEditor">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -643,20 +958,8 @@
                 </svg>
                 Reset
               </button>
-              <button class="btn btn-secondary" id="btnSaveAsNew">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                  <polyline points="17 21 17 13 7 13 7 21"/>
-                  <polyline points="7 3 7 8 15 8"/>
-                </svg>
-                Save as New
-              </button>
-              <button class="btn btn-primary" id="btnSaveEditor">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-                Save
-              </button>
+              <button class="btn btn-secondary" id="btnSaveAsNew">Save as New</button>
+              <button class="btn btn-primary" id="btnSaveEditor">Save</button>
             </div>
           </div>
         </div>

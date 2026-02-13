@@ -57,5 +57,35 @@ contextBridge.exposeInMainWorld('api', {
   // Image Editing
   loadImageForEdit: (imagePath) => ipcRenderer.invoke('load-image-for-edit', imagePath),
   previewImageEdit: (data) => ipcRenderer.invoke('preview-image-edit', data),
-  saveEditedImage: (data) => ipcRenderer.invoke('save-edited-image', data)
+  saveEditedImage: (data) => ipcRenderer.invoke('save-edited-image', data),
+
+  // Advanced Image Editing
+  rotateImage: (data) => ipcRenderer.invoke('rotate-image', data),
+  flipImage: (data) => ipcRenderer.invoke('flip-image', data),
+  cropImage: (data) => ipcRenderer.invoke('crop-image', data),
+  resizeImage: (data) => ipcRenderer.invoke('resize-image', data),
+  addWatermark: (data) => ipcRenderer.invoke('add-watermark', data),
+  exportImage: (data) => ipcRenderer.invoke('export-image', data),
+
+  // Upscaling
+  upscaleBasic: (data) => ipcRenderer.invoke('upscale-basic', data),
+  upscaleAI: (data) => ipcRenderer.invoke('upscale-ai', data),
+  checkRealesrgan: () => ipcRenderer.invoke('check-realesrgan'),
+  installRealesrgan: () => ipcRenderer.invoke('install-realesrgan'),
+  onRealesrganProgress: (callback) => ipcRenderer.on('realesrgan-progress', (e, data) => callback(data)),
+
+  // Presets
+  savePreset: (data) => ipcRenderer.invoke('save-preset', data),
+  loadPresets: () => ipcRenderer.invoke('load-presets'),
+  deletePreset: (data) => ipcRenderer.invoke('delete-preset', data),
+
+  // Batch & Thumbnails
+  generateThumbnails: (data) => ipcRenderer.invoke('generate-thumbnails', data),
+  batchEditImages: (data) => ipcRenderer.invoke('batch-edit-images', data),
+  onBatchEditProgress: (callback) => ipcRenderer.on('batch-edit-progress', (e, data) => callback(data)),
+
+  // Bulk Upscale
+  startBulkUpscale: (options) => ipcRenderer.invoke('start-bulk-upscale', options),
+  stopBulkUpscale: () => ipcRenderer.invoke('stop-bulk-upscale'),
+  onBulkUpscaleProgress: (callback) => ipcRenderer.on('bulk-upscale-progress', (e, data) => callback(data))
 });

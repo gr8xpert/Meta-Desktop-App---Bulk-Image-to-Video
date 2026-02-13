@@ -122,7 +122,13 @@ const elements = {
   imageEditorModal: document.getElementById('imageEditorModal'),
   btnCloseEditor: document.getElementById('btnCloseEditor'),
   editorPreviewImage: document.getElementById('editorPreviewImage'),
+  editorOriginalImage: document.getElementById('editorOriginalImage'),
   editorLoading: document.getElementById('editorLoading'),
+  editorImageInfo: document.getElementById('editorImageInfo'),
+  editorCompare: document.getElementById('editorCompare'),
+  compareSlider: document.getElementById('compareSlider'),
+
+  // Editor Sliders
   editorBrightness: document.getElementById('editorBrightness'),
   editorContrast: document.getElementById('editorContrast'),
   editorSaturation: document.getElementById('editorSaturation'),
@@ -133,12 +139,76 @@ const elements = {
   saturationValue: document.getElementById('saturationValue'),
   sharpnessValue: document.getElementById('sharpnessValue'),
   blurValue: document.getElementById('blurValue'),
+
+  // Editor Filters
   filterGrayscale: document.getElementById('filterGrayscale'),
   filterSepia: document.getElementById('filterSepia'),
   filterNegative: document.getElementById('filterNegative'),
+
+  // Editor Actions
   btnResetEditor: document.getElementById('btnResetEditor'),
   btnSaveAsNew: document.getElementById('btnSaveAsNew'),
-  btnSaveEditor: document.getElementById('btnSaveEditor')
+  btnSaveEditor: document.getElementById('btnSaveEditor'),
+
+  // Transform
+  btnRotateLeft: document.getElementById('btnRotateLeft'),
+  btnRotate180: document.getElementById('btnRotate180'),
+  btnRotateRight: document.getElementById('btnRotateRight'),
+  btnFlipH: document.getElementById('btnFlipH'),
+  btnFlipV: document.getElementById('btnFlipV'),
+  resizeWidth: document.getElementById('resizeWidth'),
+  resizeHeight: document.getElementById('resizeHeight'),
+  resizeLock: document.getElementById('resizeLock'),
+  btnApplyResize: document.getElementById('btnApplyResize'),
+
+  // Upscale
+  realesrganStatus: document.getElementById('realesrganStatus'),
+  aiUpscaleButtons: document.getElementById('aiUpscaleButtons'),
+  btnInstallRealesrgan: document.getElementById('btnInstallRealesrgan'),
+  realesrganProgress: document.getElementById('realesrganProgress'),
+  realesrganProgressBar: document.getElementById('realesrganProgressBar'),
+  realesrganProgressText: document.getElementById('realesrganProgressText'),
+
+  // Export
+  exportFormat: document.getElementById('exportFormat'),
+  exportQuality: document.getElementById('exportQuality'),
+  exportQualityValue: document.getElementById('exportQualityValue'),
+  watermarkText: document.getElementById('watermarkText'),
+  watermarkSize: document.getElementById('watermarkSize'),
+  watermarkOpacity: document.getElementById('watermarkOpacity'),
+  btnApplyWatermark: document.getElementById('btnApplyWatermark'),
+  btnGenerateThumbnails: document.getElementById('btnGenerateThumbnails'),
+  thumbYoutube: document.getElementById('thumbYoutube'),
+  thumbInstagram: document.getElementById('thumbInstagram'),
+  thumbTwitter: document.getElementById('thumbTwitter'),
+  thumbFacebook: document.getElementById('thumbFacebook'),
+
+  // Presets
+  presetSelect: document.getElementById('presetSelect'),
+  btnLoadPreset: document.getElementById('btnLoadPreset'),
+  btnSavePreset: document.getElementById('btnSavePreset'),
+  btnDeletePreset: document.getElementById('btnDeletePreset'),
+
+  // Bulk Upscale Elements
+  upscaleDropZone: document.getElementById('upscaleDropZone'),
+  btnUpscaleSelectFiles: document.getElementById('btnUpscaleSelectFiles'),
+  btnUpscaleSelectFolder: document.getElementById('btnUpscaleSelectFolder'),
+  upscaleFileCount: document.getElementById('upscaleFileCount'),
+  upscaleFileList: document.getElementById('upscaleFileList'),
+  upscaleFileActions: document.getElementById('upscaleFileActions'),
+  btnUpscaleClearFiles: document.getElementById('btnUpscaleClearFiles'),
+  btnMethodBasic: document.getElementById('btnMethodBasic'),
+  btnMethodAI: document.getElementById('btnMethodAI'),
+  upscaleOutputFolder: document.getElementById('upscaleOutputFolder'),
+  btnUpscaleSelectOutput: document.getElementById('btnUpscaleSelectOutput'),
+  upscaleOutputFormat: document.getElementById('upscaleOutputFormat'),
+  btnStartUpscale: document.getElementById('btnStartUpscale'),
+  btnStopUpscale: document.getElementById('btnStopUpscale'),
+  upscaleProgressSection: document.getElementById('upscaleProgressSection'),
+  upscaleProgressCompleted: document.getElementById('upscaleProgressCompleted'),
+  upscaleProgressTotal: document.getElementById('upscaleProgressTotal'),
+  upscaleProgressStatus: document.getElementById('upscaleProgressStatus'),
+  upscaleProgressBar: document.getElementById('upscaleProgressBar')
 };
 
 // Gallery State
@@ -148,6 +218,7 @@ let galleryFilter = 'all';
 // Image Editor State
 let editorImagePath = null;
 let editorOriginalBase64 = null;
+let editorImageMetadata = null;
 let editorEdits = {
   brightness: 1,
   contrast: 1,
@@ -156,9 +227,25 @@ let editorEdits = {
   blur: 0,
   grayscale: false,
   sepia: false,
-  negative: false
+  negative: false,
+  rotation: 0,
+  flipH: false,
+  flipV: false,
+  watermark: null,  // { text, fontSize, opacity, color }
+  upscaleScale: null,  // 2, 3, or 4 for basic upscale
+  aiUpscaleTempPath: null  // temp file path from AI upscale
 };
 let editorPreviewTimeout = null;
+let editorPresets = {};
+let resizeAspectLocked = true;
+let realesrganInstalled = false;
+
+// Bulk Upscale State
+let upscaleFiles = [];           // Array of { id, name, path, status, progress, thumbnail }
+let upscaleMethod = 'basic';     // 'basic' or 'ai'
+let upscaleScale = 2;            // 2, 3, or 4
+let isUpscaling = false;
+let upscaleIdCounter = 0;
 
 // ============================================
 // Initialization
@@ -210,6 +297,13 @@ function applyConfig(cfg) {
     elements.ttiOutputFolder.value = cfg.ttiOutputFolder;
   } else if (cfg.outputFolder) {
     elements.ttiOutputFolder.value = cfg.outputFolder;
+  }
+
+  // Upscale config - use same output folder by default
+  if (cfg.upscaleOutputFolder) {
+    elements.upscaleOutputFolder.value = cfg.upscaleOutputFolder;
+  } else if (cfg.outputFolder) {
+    elements.upscaleOutputFolder.value = cfg.outputFolder;
   }
 }
 
@@ -940,7 +1034,8 @@ async function saveSettings() {
     delayBetween: parseInt(elements.settingDelay.value),
     retryAttempts: parseInt(elements.settingRetries.value),
     headless: elements.settingHeadless.checked,
-    ttiOutputFolder: elements.ttiOutputFolder.value
+    ttiOutputFolder: elements.ttiOutputFolder.value,
+    upscaleOutputFolder: elements.upscaleOutputFolder.value
   };
 
   await window.api.saveConfig(cfg);
@@ -1539,7 +1634,20 @@ async function openImageEditor(imagePath) {
     const result = await window.api.loadImageForEdit(imagePath);
     if (result.success) {
       editorOriginalBase64 = result.base64;
+      editorImageMetadata = { width: result.width, height: result.height, format: result.format };
       elements.editorPreviewImage.src = result.base64;
+      elements.editorOriginalImage.src = result.base64;
+      elements.editorImageInfo.textContent = `${result.width} x ${result.height} • ${result.format.toUpperCase()}`;
+
+      // Set resize inputs
+      elements.resizeWidth.value = result.width;
+      elements.resizeHeight.value = result.height;
+
+      // Check Real-ESRGAN status
+      checkRealesrganStatus();
+
+      // Load presets
+      loadEditorPresets();
     } else {
       showToast('Failed to load image: ' + result.error, 'error');
       closeImageEditor();
@@ -1556,7 +1664,11 @@ function closeImageEditor() {
   elements.imageEditorModal.classList.remove('active');
   editorImagePath = null;
   editorOriginalBase64 = null;
+  editorImageMetadata = null;
   elements.editorPreviewImage.src = '';
+  elements.editorOriginalImage.src = '';
+  elements.editorCompare.checked = false;
+  toggleCompareMode(false);
 }
 
 function resetEditorState() {
@@ -1568,7 +1680,13 @@ function resetEditorState() {
     blur: 0,
     grayscale: false,
     sepia: false,
-    negative: false
+    negative: false,
+    rotation: 0,
+    flipH: false,
+    flipV: false,
+    watermark: null,
+    upscaleScale: null,
+    aiUpscaleTempPath: null
   };
 
   // Reset sliders
@@ -1594,6 +1712,12 @@ function resetEditorState() {
   if (editorOriginalBase64) {
     elements.editorPreviewImage.src = editorOriginalBase64;
   }
+
+  // Reset resize to original dimensions
+  if (editorImageMetadata) {
+    elements.resizeWidth.value = editorImageMetadata.width;
+    elements.resizeHeight.value = editorImageMetadata.height;
+  }
 }
 
 function showEditorLoading(show) {
@@ -1605,7 +1729,6 @@ function showEditorLoading(show) {
 }
 
 function updateEditorPreview() {
-  // Debounce preview updates
   if (editorPreviewTimeout) {
     clearTimeout(editorPreviewTimeout);
   }
@@ -1653,74 +1776,484 @@ function toggleFilter(filterKey, button) {
 }
 
 async function saveEditedImage(asNew = false) {
-  if (!editorImagePath) return;
+  if (!editorImagePath) {
+    showToast('No image loaded', 'error');
+    return;
+  }
 
   showEditorLoading(true);
 
   try {
-    const outputPath = asNew ? null : editorImagePath;
-    const result = await window.api.saveEditedImage({
+    const format = elements.exportFormat.value || 'jpg';
+    const quality = parseInt(elements.exportQuality.value) || 90;
+
+    console.log('[SAVE] Image path:', editorImagePath);
+    console.log('[SAVE] Format:', format);
+    console.log('[SAVE] Quality:', quality);
+    console.log('[SAVE] As new:', asNew);
+    console.log('[SAVE] Edits:', editorEdits);
+
+    const result = await window.api.exportImage({
       imagePath: editorImagePath,
       edits: editorEdits,
-      outputPath
+      format,
+      quality,
+      outputPath: asNew ? null : editorImagePath
+    });
+
+    console.log('[SAVE] Result:', result);
+
+    if (result.success) {
+      if (result.fallback) {
+        showToast(`Original file was locked. Saved as: ${result.outputPath.split('\\').pop()}`, 'warning');
+      } else {
+        showToast(`Image saved: ${result.outputPath.split('\\').pop()}`, 'success');
+      }
+      closeImageEditor();
+      loadGallery(); // Refresh gallery
+    } else {
+      showToast('Failed to save: ' + (result.error || 'Unknown error'), 'error');
+      console.error('[SAVE] Error:', result.error);
+    }
+  } catch (e) {
+    showToast('Error saving image: ' + e.message, 'error');
+    console.error('[SAVE] Exception:', e);
+  } finally {
+    showEditorLoading(false);
+  }
+}
+
+// Editor Tab Switching
+function switchEditorTab(tabId) {
+  document.querySelectorAll('.editor-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.tab === tabId);
+  });
+  document.querySelectorAll('.editor-tab-content').forEach(content => {
+    content.classList.toggle('active', content.id === `editorTab${tabId.charAt(0).toUpperCase() + tabId.slice(1)}`);
+  });
+}
+
+// Compare Mode
+function toggleCompareMode(enabled) {
+  elements.editorOriginalImage.style.display = enabled ? 'block' : 'none';
+  elements.compareSlider.style.display = enabled ? 'block' : 'none';
+
+  if (enabled) {
+    // Reset slider to center
+    updateComparePosition(50);
+  }
+}
+
+// Update compare slider position
+function updateComparePosition(percent) {
+  percent = Math.max(0, Math.min(100, percent));
+  elements.compareSlider.style.left = `${percent}%`;
+  elements.editorOriginalImage.style.clipPath = `inset(0 ${100 - percent}% 0 0)`;
+}
+
+// Compare slider drag handlers
+let isCompareDragging = false;
+
+function initCompareSlider() {
+  const previewContainer = document.querySelector('.editor-preview');
+
+  elements.compareSlider.addEventListener('mousedown', (e) => {
+    isCompareDragging = true;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isCompareDragging) return;
+
+    const rect = previewContainer.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percent = (x / rect.width) * 100;
+    updateComparePosition(percent);
+  });
+
+  document.addEventListener('mouseup', () => {
+    isCompareDragging = false;
+  });
+
+  // Touch support
+  elements.compareSlider.addEventListener('touchstart', (e) => {
+    isCompareDragging = true;
+    e.preventDefault();
+  });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!isCompareDragging) return;
+
+    const rect = previewContainer.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = touch.clientX - rect.left;
+    const percent = (x / rect.width) * 100;
+    updateComparePosition(percent);
+  });
+
+  document.addEventListener('touchend', () => {
+    isCompareDragging = false;
+  });
+}
+
+// Transform Functions
+async function rotateImage(angle) {
+  editorEdits.rotation = (editorEdits.rotation + angle) % 360;
+  showEditorLoading(true);
+  try {
+    const result = await window.api.rotateImage({ imagePath: editorImagePath, angle: editorEdits.rotation });
+    if (result.success) {
+      elements.editorPreviewImage.src = result.base64;
+    }
+  } finally {
+    showEditorLoading(false);
+  }
+}
+
+async function flipImage(direction) {
+  if (direction === 'horizontal') {
+    editorEdits.flipH = !editorEdits.flipH;
+  } else {
+    editorEdits.flipV = !editorEdits.flipV;
+  }
+  showEditorLoading(true);
+  try {
+    const result = await window.api.flipImage({ imagePath: editorImagePath, direction });
+    if (result.success) {
+      elements.editorPreviewImage.src = result.base64;
+    }
+  } finally {
+    showEditorLoading(false);
+  }
+}
+
+async function applyResize() {
+  const width = parseInt(elements.resizeWidth.value);
+  const height = parseInt(elements.resizeHeight.value);
+
+  if (!width || !height) {
+    showToast('Please enter valid dimensions', 'warning');
+    return;
+  }
+
+  showEditorLoading(true);
+  try {
+    const result = await window.api.resizeImage({ imagePath: editorImagePath, width, height });
+    if (result.success) {
+      elements.editorPreviewImage.src = result.base64;
+      elements.editorImageInfo.textContent = `${width} x ${height}`;
+      showToast('Resize applied', 'success');
+    }
+  } finally {
+    showEditorLoading(false);
+  }
+}
+
+// Upscale Functions
+async function checkRealesrganStatus() {
+  const result = await window.api.checkRealesrgan();
+  realesrganInstalled = result.installed;
+
+  if (result.installed) {
+    elements.realesrganStatus.innerHTML = '<span class="status-installed">✓ Real-ESRGAN ready</span>';
+    elements.aiUpscaleButtons.style.display = 'flex';
+    elements.btnInstallRealesrgan.style.display = 'none';
+  } else {
+    elements.realesrganStatus.innerHTML = '<span class="status-not-installed">⚠ Real-ESRGAN not found</span>';
+    elements.aiUpscaleButtons.style.display = 'none';
+    elements.btnInstallRealesrgan.style.display = 'none'; // Bundled, so no install option
+  }
+}
+
+async function installRealesrgan() {
+  elements.btnInstallRealesrgan.style.display = 'none';
+  elements.realesrganProgress.style.display = 'block';
+
+  const result = await window.api.installRealesrgan();
+
+  if (result.success) {
+    showToast('Real-ESRGAN installed successfully!', 'success');
+    checkRealesrganStatus();
+  } else {
+    showToast('Installation failed: ' + result.error, 'error');
+    elements.btnInstallRealesrgan.style.display = 'block';
+  }
+
+  elements.realesrganProgress.style.display = 'none';
+}
+
+async function upscaleImage(scale, method) {
+  if (!editorImagePath) {
+    showToast('No image loaded', 'error');
+    return;
+  }
+
+  showEditorLoading(true);
+  showToast(`Upscaling ${scale}x (${method})... This may take a moment.`, 'info');
+
+  console.log('[UPSCALE] Starting:', { scale, method, path: editorImagePath });
+
+  try {
+    let result;
+    if (method === 'ai') {
+      // AI upscale saves to temp file for preview
+      result = await window.api.upscaleAI({ imagePath: editorImagePath, scale });
+      if (result.success && result.tempPath) {
+        editorEdits.aiUpscaleTempPath = result.tempPath; // Track temp file for saving
+        editorEdits.upscaleScale = null; // Clear basic upscale if any
+      }
+    } else {
+      // Basic upscale is preview only - will be applied on Save
+      result = await window.api.upscaleBasic({ imagePath: editorImagePath, scale });
+      if (result.success) {
+        editorEdits.upscaleScale = scale; // Track for saving later
+        editorEdits.aiUpscaleTempPath = null; // Clear AI upscale if any
+      }
+    }
+
+    console.log('[UPSCALE] Result:', result);
+
+    if (result.success) {
+      elements.editorPreviewImage.src = result.base64;
+      if (result.width && result.height) {
+        elements.editorImageInfo.textContent = `${result.width} x ${result.height}`;
+      }
+      showToast(`Upscaled to ${scale}x successfully! (click Save to keep)`, 'success');
+    } else {
+      showToast('Upscale failed: ' + (result.error || 'Unknown error'), 'error');
+      console.error('[UPSCALE] Error:', result.error);
+    }
+  } catch (e) {
+    showToast('Upscale error: ' + e.message, 'error');
+    console.error('[UPSCALE] Exception:', e);
+  } finally {
+    showEditorLoading(false);
+  }
+}
+
+// Watermark
+async function applyWatermark() {
+  const text = elements.watermarkText.value.trim();
+  if (!text) {
+    showToast('Please enter watermark text', 'warning');
+    return;
+  }
+
+  // Store watermark data in edits so it will be saved
+  editorEdits.watermark = {
+    text,
+    fontSize: parseInt(elements.watermarkSize.value) || 24,
+    opacity: (parseInt(elements.watermarkOpacity.value) || 50) / 100,
+    color: 'white'
+  };
+
+  showEditorLoading(true);
+  try {
+    const result = await window.api.addWatermark({
+      imagePath: editorImagePath,
+      watermark: editorEdits.watermark
     });
 
     if (result.success) {
-      showToast(`Image saved: ${result.outputPath.split('\\').pop()}`, 'success');
-      if (asNew) {
-        loadGallery(); // Refresh gallery to show new image
-      }
-      closeImageEditor();
-    } else {
-      showToast('Failed to save: ' + result.error, 'error');
+      elements.editorPreviewImage.src = result.base64;
+      showToast('Watermark applied (will be saved)', 'success');
     }
-  } catch (e) {
-    showToast('Error saving image', 'error');
   } finally {
     showEditorLoading(false);
+  }
+}
+
+// Thumbnails
+async function generateThumbnails() {
+  const sizes = [];
+  if (elements.thumbYoutube.checked) sizes.push({ name: 'youtube', width: 1280, height: 720 });
+  if (elements.thumbInstagram.checked) sizes.push({ name: 'instagram', width: 1080, height: 1080 });
+  if (elements.thumbTwitter.checked) sizes.push({ name: 'twitter', width: 1200, height: 675 });
+  if (elements.thumbFacebook.checked) sizes.push({ name: 'facebook', width: 1200, height: 630 });
+
+  if (sizes.length === 0) {
+    showToast('Select at least one thumbnail size', 'warning');
+    return;
+  }
+
+  const outputFolder = elements.ttiOutputFolder.value || elements.outputFolder.value;
+  if (!outputFolder) {
+    showToast('Please set an output folder first', 'warning');
+    return;
+  }
+
+  showEditorLoading(true);
+  try {
+    const result = await window.api.generateThumbnails({
+      imagePath: editorImagePath,
+      outputFolder,
+      sizes
+    });
+
+    if (result.success) {
+      showToast(`Generated ${result.results.length} thumbnails!`, 'success');
+      loadGallery();
+    }
+  } finally {
+    showEditorLoading(false);
+  }
+}
+
+// Presets
+async function loadEditorPresets() {
+  const result = await window.api.loadPresets();
+  if (result.success) {
+    editorPresets = result.presets;
+    updatePresetDropdown();
+  }
+}
+
+function updatePresetDropdown() {
+  const names = Object.keys(editorPresets);
+  elements.presetSelect.innerHTML = '<option value="">Select preset...</option>' +
+    names.map(name => `<option value="${name}">${name}</option>`).join('');
+}
+
+async function saveCurrentPreset() {
+  const name = prompt('Enter preset name:');
+  if (!name) return;
+
+  const result = await window.api.savePreset({ name, edits: editorEdits });
+  if (result.success) {
+    showToast('Preset saved', 'success');
+    loadEditorPresets();
+  }
+}
+
+function loadSelectedPreset() {
+  const name = elements.presetSelect.value;
+  if (!name || !editorPresets[name]) return;
+
+  const preset = editorPresets[name];
+  editorEdits = { ...editorEdits, ...preset };
+
+  // Update UI
+  elements.editorBrightness.value = (preset.brightness || 1) * 100;
+  elements.editorContrast.value = (preset.contrast || 1) * 100;
+  elements.editorSaturation.value = (preset.saturation || 1) * 100;
+  elements.editorSharpness.value = preset.sharpness || 0;
+  elements.editorBlur.value = preset.blur || 0;
+
+  elements.brightnessValue.textContent = `${Math.round((preset.brightness || 1) * 100)}%`;
+  elements.contrastValue.textContent = `${Math.round((preset.contrast || 1) * 100)}%`;
+  elements.saturationValue.textContent = `${Math.round((preset.saturation || 1) * 100)}%`;
+  elements.sharpnessValue.textContent = (preset.sharpness || 0).toString();
+  elements.blurValue.textContent = (preset.blur || 0).toString();
+
+  elements.filterGrayscale.classList.toggle('active', preset.grayscale);
+  elements.filterSepia.classList.toggle('active', preset.sepia);
+  elements.filterNegative.classList.toggle('active', preset.negative);
+
+  updateEditorPreview();
+  showToast('Preset loaded', 'success');
+}
+
+async function deleteSelectedPreset() {
+  const name = elements.presetSelect.value;
+  if (!name) return;
+
+  if (!confirm(`Delete preset "${name}"?`)) return;
+
+  const result = await window.api.deletePreset({ name });
+  if (result.success) {
+    showToast('Preset deleted', 'success');
+    loadEditorPresets();
   }
 }
 
 function setupImageEditorEventListeners() {
   // Close button
   elements.btnCloseEditor.addEventListener('click', closeImageEditor);
-
-  // Click on backdrop to close
   elements.imageEditorModal.querySelector('.modal-backdrop').addEventListener('click', closeImageEditor);
 
-  // Slider event listeners
-  elements.editorBrightness.addEventListener('input', () => {
-    handleSliderChange(elements.editorBrightness, elements.brightnessValue, 'brightness', true);
+  // Editor tabs
+  document.querySelectorAll('.editor-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchEditorTab(tab.dataset.tab));
   });
 
-  elements.editorContrast.addEventListener('input', () => {
-    handleSliderChange(elements.editorContrast, elements.contrastValue, 'contrast', true);
+  // Compare toggle
+  elements.editorCompare.addEventListener('change', () => {
+    toggleCompareMode(elements.editorCompare.checked);
   });
 
-  elements.editorSaturation.addEventListener('input', () => {
-    handleSliderChange(elements.editorSaturation, elements.saturationValue, 'saturation', true);
+  // Adjustment sliders
+  elements.editorBrightness.addEventListener('input', () => handleSliderChange(elements.editorBrightness, elements.brightnessValue, 'brightness', true));
+  elements.editorContrast.addEventListener('input', () => handleSliderChange(elements.editorContrast, elements.contrastValue, 'contrast', true));
+  elements.editorSaturation.addEventListener('input', () => handleSliderChange(elements.editorSaturation, elements.saturationValue, 'saturation', true));
+  elements.editorSharpness.addEventListener('input', () => handleSliderChange(elements.editorSharpness, elements.sharpnessValue, 'sharpness', false));
+  elements.editorBlur.addEventListener('input', () => handleSliderChange(elements.editorBlur, elements.blurValue, 'blur', false));
+
+  // Filters
+  elements.filterGrayscale.addEventListener('click', () => toggleFilter('grayscale', elements.filterGrayscale));
+  elements.filterSepia.addEventListener('click', () => toggleFilter('sepia', elements.filterSepia));
+  elements.filterNegative.addEventListener('click', () => toggleFilter('negative', elements.filterNegative));
+
+  // Transform
+  elements.btnRotateLeft.addEventListener('click', () => rotateImage(-90));
+  elements.btnRotate180.addEventListener('click', () => rotateImage(180));
+  elements.btnRotateRight.addEventListener('click', () => rotateImage(90));
+  elements.btnFlipH.addEventListener('click', () => flipImage('horizontal'));
+  elements.btnFlipV.addEventListener('click', () => flipImage('vertical'));
+
+  // Resize
+  elements.resizeLock.addEventListener('click', () => {
+    resizeAspectLocked = !resizeAspectLocked;
+    elements.resizeLock.classList.toggle('unlocked', !resizeAspectLocked);
   });
 
-  elements.editorSharpness.addEventListener('input', () => {
-    handleSliderChange(elements.editorSharpness, elements.sharpnessValue, 'sharpness', false);
+  elements.resizeWidth.addEventListener('input', () => {
+    if (resizeAspectLocked && editorImageMetadata) {
+      const ratio = editorImageMetadata.height / editorImageMetadata.width;
+      elements.resizeHeight.value = Math.round(parseInt(elements.resizeWidth.value) * ratio);
+    }
   });
 
-  elements.editorBlur.addEventListener('input', () => {
-    handleSliderChange(elements.editorBlur, elements.blurValue, 'blur', false);
+  elements.resizeHeight.addEventListener('input', () => {
+    if (resizeAspectLocked && editorImageMetadata) {
+      const ratio = editorImageMetadata.width / editorImageMetadata.height;
+      elements.resizeWidth.value = Math.round(parseInt(elements.resizeHeight.value) * ratio);
+    }
   });
 
-  // Filter buttons
-  elements.filterGrayscale.addEventListener('click', () => {
-    toggleFilter('grayscale', elements.filterGrayscale);
+  elements.btnApplyResize.addEventListener('click', applyResize);
+
+  // Upscale
+  document.querySelectorAll('.upscale-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const scale = parseInt(btn.dataset.scale);
+      const method = btn.dataset.method;
+      upscaleImage(scale, method);
+    });
   });
 
-  elements.filterSepia.addEventListener('click', () => {
-    toggleFilter('sepia', elements.filterSepia);
+  elements.btnInstallRealesrgan.addEventListener('click', installRealesrgan);
+
+  // Real-ESRGAN progress listener
+  window.api.onRealesrganProgress((data) => {
+    elements.realesrganProgressBar.style.width = `${data.percent}%`;
+    elements.realesrganProgressText.textContent = data.stage;
   });
 
-  elements.filterNegative.addEventListener('click', () => {
-    toggleFilter('negative', elements.filterNegative);
+  // Export quality
+  elements.exportQuality.addEventListener('input', () => {
+    elements.exportQualityValue.textContent = `${elements.exportQuality.value}%`;
   });
+
+  // Watermark
+  elements.btnApplyWatermark.addEventListener('click', applyWatermark);
+
+  // Thumbnails
+  elements.btnGenerateThumbnails.addEventListener('click', generateThumbnails);
+
+  // Presets
+  elements.btnLoadPreset.addEventListener('click', loadSelectedPreset);
+  elements.btnSavePreset.addEventListener('click', saveCurrentPreset);
+  elements.btnDeletePreset.addEventListener('click', deleteSelectedPreset);
 
   // Action buttons
   elements.btnResetEditor.addEventListener('click', () => {
@@ -1730,20 +2263,320 @@ function setupImageEditorEventListeners() {
     }
   });
 
-  elements.btnSaveAsNew.addEventListener('click', () => {
-    saveEditedImage(true);
-  });
+  elements.btnSaveAsNew.addEventListener('click', () => saveEditedImage(true));
+  elements.btnSaveEditor.addEventListener('click', () => saveEditedImage(false));
 
-  elements.btnSaveEditor.addEventListener('click', () => {
-    saveEditedImage(false);
-  });
-
-  // Escape key to close
+  // Escape to close
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && elements.imageEditorModal.classList.contains('active')) {
       closeImageEditor();
     }
   });
+}
+
+// ============================================
+// Bulk Upscale Functions
+// ============================================
+
+function setupUpscaleEventListeners() {
+  // Drop zone
+  elements.upscaleDropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    elements.upscaleDropZone.classList.add('drag-over');
+  });
+
+  elements.upscaleDropZone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    elements.upscaleDropZone.classList.remove('drag-over');
+  });
+
+  elements.upscaleDropZone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    elements.upscaleDropZone.classList.remove('drag-over');
+
+    const items = Array.from(e.dataTransfer.items);
+    const paths = [];
+
+    for (const item of items) {
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file.path) {
+          paths.push(file.path);
+        }
+      }
+    }
+
+    if (paths.length > 0) {
+      await addUpscaleFiles(paths);
+    }
+  });
+
+  elements.upscaleDropZone.addEventListener('click', () => {
+    elements.btnUpscaleSelectFiles.click();
+  });
+
+  // File selection buttons
+  elements.btnUpscaleSelectFiles.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const selectedFiles = await window.api.selectFiles();
+    if (selectedFiles.length > 0) {
+      await addUpscaleFiles(selectedFiles);
+    }
+  });
+
+  elements.btnUpscaleSelectFolder.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const folder = await window.api.selectFolder('input');
+    if (folder) {
+      const scannedFiles = await window.api.scanFolder(folder, false);
+      const paths = scannedFiles.map(f => f.path);
+      await addUpscaleFiles(paths);
+    }
+  });
+
+  // Clear files
+  elements.btnUpscaleClearFiles.addEventListener('click', () => {
+    if (upscaleFiles.length > 0 && confirm('Clear all files?')) {
+      upscaleFiles = [];
+      renderUpscaleFileList();
+    }
+  });
+
+  // Method buttons
+  document.querySelectorAll('.method-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      upscaleMethod = btn.dataset.method;
+    });
+  });
+
+  // Scale buttons
+  document.querySelectorAll('.scale-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      upscaleScale = parseInt(btn.dataset.scale);
+    });
+  });
+
+  // Output folder
+  elements.btnUpscaleSelectOutput.addEventListener('click', async () => {
+    const folder = await window.api.selectFolder('output');
+    if (folder) {
+      elements.upscaleOutputFolder.value = folder;
+    }
+  });
+
+  // Start/Stop
+  elements.btnStartUpscale.addEventListener('click', startBulkUpscale);
+  elements.btnStopUpscale.addEventListener('click', stopBulkUpscale);
+
+  // Progress listener
+  window.api.onBulkUpscaleProgress(handleBulkUpscaleProgress);
+}
+
+async function addUpscaleFiles(paths) {
+  const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+
+  for (const filePath of paths) {
+    const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
+    if (imageExts.includes(ext)) {
+      const name = filePath.substring(filePath.lastIndexOf('\\') + 1);
+      if (!upscaleFiles.some(f => f.path === filePath)) {
+        let thumbnail = '';
+        try {
+          thumbnail = await window.api.getThumbnail(filePath);
+        } catch (e) {
+          thumbnail = '';
+        }
+
+        upscaleFiles.push({
+          id: ++upscaleIdCounter,
+          name,
+          path: filePath,
+          status: 'pending',
+          progress: 0,
+          thumbnail
+        });
+      }
+    }
+  }
+
+  renderUpscaleFileList();
+}
+
+function removeUpscaleFile(id) {
+  upscaleFiles = upscaleFiles.filter(f => f.id !== id);
+  renderUpscaleFileList();
+}
+
+function renderUpscaleFileList() {
+  elements.upscaleFileCount.textContent = upscaleFiles.length;
+
+  if (upscaleFiles.length === 0) {
+    elements.upscaleDropZone.style.display = 'block';
+    elements.upscaleFileList.style.display = 'none';
+    elements.upscaleFileActions.style.display = 'none';
+    return;
+  }
+
+  elements.upscaleDropZone.style.display = 'none';
+  elements.upscaleFileList.style.display = 'block';
+  elements.upscaleFileActions.style.display = 'flex';
+
+  const html = upscaleFiles.map(file => {
+    const statusText = getUpscaleStatusText(file.status);
+    const statusClass = file.status;
+
+    return `
+      <div class="upscale-file-item ${statusClass}" data-id="${file.id}">
+        <div class="upscale-file-thumb">
+          ${file.thumbnail ? `<img src="${file.thumbnail}" alt="${file.name}">` : ''}
+        </div>
+        <div class="upscale-file-info">
+          <div class="upscale-file-name" title="${file.name}">${file.name}</div>
+          <div class="upscale-file-meta">${file.status === 'completed' ? 'Upscaled' : ''}</div>
+        </div>
+        <div class="upscale-file-status ${statusClass}">${statusText}</div>
+        ${file.status === 'pending' ? `
+          <button class="upscale-file-remove" title="Remove" onclick="removeUpscaleFile(${file.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  elements.upscaleFileList.innerHTML = html;
+}
+
+function getUpscaleStatusText(status) {
+  switch (status) {
+    case 'pending': return 'Waiting';
+    case 'processing': return 'Processing...';
+    case 'completed': return '✓ Done';
+    case 'failed': return '✕ Failed';
+    default: return status;
+  }
+}
+
+async function startBulkUpscale() {
+  const pendingFiles = upscaleFiles.filter(f => f.status === 'pending');
+
+  if (pendingFiles.length === 0) {
+    showToast('No files to upscale', 'warning');
+    return;
+  }
+
+  if (!elements.upscaleOutputFolder.value) {
+    showToast('Please select an output folder', 'error');
+    return;
+  }
+
+  // Check if AI upscale is available
+  if (upscaleMethod === 'ai') {
+    const result = await window.api.checkRealesrgan();
+    if (!result.installed) {
+      showToast('Real-ESRGAN is not available. Please use Basic upscaling.', 'error');
+      return;
+    }
+  }
+
+  isUpscaling = true;
+  elements.btnStartUpscale.style.display = 'none';
+  elements.btnStopUpscale.style.display = 'block';
+  elements.upscaleProgressSection.style.display = 'block';
+  elements.upscaleProgressTotal.textContent = pendingFiles.length;
+  elements.upscaleProgressCompleted.textContent = '0';
+  elements.upscaleProgressBar.style.width = '0%';
+  elements.upscaleProgressStatus.textContent = 'Starting...';
+
+  const result = await window.api.startBulkUpscale({
+    files: pendingFiles,
+    method: upscaleMethod,
+    scale: upscaleScale,
+    outputFolder: elements.upscaleOutputFolder.value,
+    outputFormat: elements.upscaleOutputFormat.value
+  });
+
+  if (!result.success) {
+    showToast(result.error || 'Failed to start upscaling', 'error');
+    isUpscaling = false;
+    elements.btnStartUpscale.style.display = 'block';
+    elements.btnStopUpscale.style.display = 'none';
+  }
+}
+
+async function stopBulkUpscale() {
+  await window.api.stopBulkUpscale();
+  isUpscaling = false;
+  elements.btnStartUpscale.style.display = 'block';
+  elements.btnStopUpscale.style.display = 'none';
+  elements.upscaleProgressStatus.textContent = 'Stopped';
+  showToast('Upscaling stopped', 'warning');
+}
+
+function handleBulkUpscaleProgress(data) {
+  const file = upscaleFiles.find(f => f.id === data.fileId);
+
+  switch (data.type) {
+    case 'file-start':
+      if (file) {
+        file.status = 'processing';
+        file.progress = 0;
+        elements.upscaleProgressStatus.textContent = `Processing: ${file.name}`;
+        renderUpscaleFileList();
+      }
+      break;
+
+    case 'file-progress':
+      if (file) {
+        file.progress = data.percent;
+        elements.upscaleProgressStatus.textContent = `${data.stage}: ${file.name}`;
+      }
+      break;
+
+    case 'file-complete':
+      if (file) {
+        file.status = data.success ? 'completed' : 'failed';
+        file.progress = 100;
+
+        const completed = upscaleFiles.filter(f => f.status === 'completed').length;
+        const failed = upscaleFiles.filter(f => f.status === 'failed').length;
+        const total = completed + failed;
+        const percent = (total / upscaleFiles.length) * 100;
+
+        elements.upscaleProgressCompleted.textContent = completed;
+        elements.upscaleProgressBar.style.width = `${percent}%`;
+
+        renderUpscaleFileList();
+      }
+      break;
+
+    case 'complete':
+      isUpscaling = false;
+      elements.btnStartUpscale.style.display = 'block';
+      elements.btnStopUpscale.style.display = 'none';
+      elements.upscaleProgressStatus.textContent = 'Complete!';
+
+      const successCount = upscaleFiles.filter(f => f.status === 'completed').length;
+      const errorCount = upscaleFiles.filter(f => f.status === 'failed').length;
+
+      if (errorCount > 0) {
+        showToast(`Completed with ${errorCount} error(s)`, 'warning');
+      } else {
+        showToast(`Successfully upscaled ${successCount} images!`, 'success');
+      }
+      break;
+
+    case 'error':
+      showToast(data.error, 'error');
+      break;
+  }
 }
 
 // ============================================
@@ -1753,3 +2586,5 @@ function setupImageEditorEventListeners() {
 init();
 setupGalleryEventListeners();
 setupImageEditorEventListeners();
+setupUpscaleEventListeners();
+initCompareSlider();
