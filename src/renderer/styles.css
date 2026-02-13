@@ -2535,17 +2535,6 @@ select {
   height: 14px;
 }
 
-.btn-danger {
-  background: transparent;
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-.btn-danger:hover {
-  background: var(--danger);
-  color: white;
-}
-
 /* Compare Slider */
 .compare-original {
   position: absolute;
