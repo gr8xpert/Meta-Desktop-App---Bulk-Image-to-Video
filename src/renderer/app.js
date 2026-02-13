@@ -1536,13 +1536,10 @@ async function renderGallery(items) {
       });
     }
 
-    // Folder button
+    // Folder button - show file in folder
     item.querySelector('.gallery-btn-folder').addEventListener('click', (e) => {
       e.stopPropagation();
-      // Handle both forward and backward slashes
-      const lastSlash = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
-      const folderPath = path.substring(0, lastSlash);
-      window.api.openFolder(folderPath);
+      window.api.showInFolder(path);
     });
 
     // Delete button

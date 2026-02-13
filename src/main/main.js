@@ -402,6 +402,21 @@ ipcMain.handle('open-folder', async (event, folderPath) => {
   }
 });
 
+// Show file in folder (opens folder and highlights the file)
+ipcMain.handle('show-in-folder', async (event, filePath) => {
+  try {
+    // Normalize path for Windows
+    let normalizedPath = filePath
+      .replace(/\\\\/g, '\\')
+      .replace(/\//g, '\\');
+
+    console.log('[SHOW-IN-FOLDER] Path:', normalizedPath);
+    shell.showItemInFolder(normalizedPath);
+  } catch (err) {
+    console.error('Error showing in folder:', err);
+  }
+});
+
 // Open file
 ipcMain.handle('open-file', async (event, filePath) => {
   shell.openPath(filePath);

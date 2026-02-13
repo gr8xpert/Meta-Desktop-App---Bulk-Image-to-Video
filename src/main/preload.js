@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Utilities
   openFolder: (path) => ipcRenderer.invoke('open-folder', path),
+  showInFolder: (path) => ipcRenderer.invoke('show-in-folder', path),
   openFile: (path) => ipcRenderer.invoke('open-file', path),
   getPresets: () => ipcRenderer.invoke('get-presets'),
   fileExists: (path) => ipcRenderer.invoke('file-exists', path),
